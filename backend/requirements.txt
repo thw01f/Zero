@@ -3,4 +3,13 @@ uvicorn[standard]
 sqlalchemy
 pydantic
 pydantic-settings
+celery[redis]
+redis
+gitpython
+anthropic
 httpx
+weasyprint
+apscheduler
+sse-starlette
+python-multipart
+aiofiles
