@@ -1,0 +1,220 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root { color-scheme: dark; }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; padding: 0; }
+  body {
+    background-color: #0a0e1a;
+    color: #dde3ef;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: #0f1526; }
+  ::-webkit-scrollbar-thumb { background: #1e2d47; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #263553; }
+}
+
+@layer components {
+  /* ── Fort Card ─────────────────────────────────────── */
+  .ft-card {
+    background: #141d30;
+    border: 1px solid #1e2d47;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  .ft-card-header {
+    padding: 10px 14px;
+    border-bottom: 1px solid #1e2d47;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .ft-card-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #8a96b0;
+  }
+  .ft-card-body { padding: 14px; }
+
+  /* ── Fort Widget (orange left-border accent) ───────── */
+  .ft-widget {
+    background: #141d30;
+    border: 1px solid #1e2d47;
+    border-left: 2px solid #f26d21;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+
+  /* ── Fort Table ────────────────────────────────────── */
+  .ft-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+  .ft-table thead tr { background: #0f1526; border-bottom: 1px solid #1e2d47; }
+  .ft-table thead th {
+    padding: 9px 12px;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8a96b0;
+    white-space: nowrap;
+  }
+  .ft-table thead th.sortable { cursor: pointer; user-select: none; }
+  .ft-table thead th.sortable:hover { color: #dde3ef; }
+  .ft-table tbody tr { border-bottom: 1px solid #1a2540; transition: background 0.1s; }
+  .ft-table tbody tr:hover { background: #1a2540; }
+  .ft-table tbody td { padding: 8px 12px; color: #dde3ef; }
+
+  /* ── Severity Badges ───────────────────────────────── */
+  .sev {
+    display: inline-flex; align-items: center;
+    padding: 2px 5px; border-radius: 3px;
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .sev-critical { background: rgba(242,85,85,0.15); color: #f25555; border: 1px solid rgba(242,85,85,0.3); }
+  .sev-major    { background: rgba(242,109,33,0.15); color: #f26d21; border: 1px solid rgba(242,109,33,0.3); }
+  .sev-minor    { background: rgba(245,166,35,0.15); color: #f5a623; border: 1px solid rgba(245,166,35,0.3); }
+  .sev-info     { background: rgba(74,159,245,0.15); color: #4a9ff5; border: 1px solid rgba(74,159,245,0.3); }
+
+  /* Category / update badges */
+  .cat-badge {
+    display: inline-flex; align-items: center;
+    padding: 1px 5px; border-radius: 3px;
+    font-size: 10px; font-weight: 500; border: 1px solid;
+  }
+  .cat-security    { background: rgba(242,85,85,0.1); color: #f25555; border-color: rgba(242,85,85,0.2); }
+  .cat-quality     { background: rgba(167,139,250,0.1); color: #a78bfa; border-color: rgba(167,139,250,0.2); }
+  .cat-performance { background: rgba(38,198,218,0.1); color: #26c6da; border-color: rgba(38,198,218,0.2); }
+  .cat-misconfig   { background: rgba(245,166,35,0.1); color: #f5a623; border-color: rgba(245,166,35,0.2); }
+  .cat-secret      { background: rgba(242,85,85,0.15); color: #f25555; border-color: rgba(242,85,85,0.3); }
+  .cat-dependency  { background: rgba(74,159,245,0.1); color: #4a9ff5; border-color: rgba(74,159,245,0.2); }
+  .cat-style       { background: rgba(62,207,142,0.1); color: #3ecf8e; border-color: rgba(62,207,142,0.2); }
+
+  /* Update classification */
+  .upd-MANDATORY    { background: rgba(242,85,85,0.15); color: #f25555; border: 1px solid rgba(242,85,85,0.3); }
+  .upd-SUGGESTED    { background: rgba(242,109,33,0.15); color: #f26d21; border: 1px solid rgba(242,109,33,0.3); }
+  .upd-OPTIONAL     { background: rgba(245,166,35,0.15); color: #f5a623; border: 1px solid rgba(245,166,35,0.3); }
+  .upd-INFORMATIONAL{ background: rgba(74,159,245,0.1); color: #4a9ff5; border: 1px solid rgba(74,159,245,0.2); }
+
+  /* Grade ring */
+  .grade-A { color: #3ecf8e; }
+  .grade-B { color: #4a9ff5; }
+  .grade-C { color: #f5a623; }
+  .grade-D { color: #f26d21; }
+  .grade-F { color: #f25555; }
+
+  /* ── Fort Buttons ──────────────────────────────────── */
+  .ft-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 5px 10px; border-radius: 3px;
+    font-size: 12px; font-weight: 500;
+    cursor: pointer; user-select: none;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .ft-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .ft-btn-primary  { background: #f26d21; color: #fff; border-color: #f26d21; }
+  .ft-btn-primary:hover:not(:disabled)  { background: #c45518; border-color: #c45518; }
+  .ft-btn-secondary { background: #1a2540; color: #8a96b0; border-color: #1e2d47; }
+  .ft-btn-secondary:hover:not(:disabled) { color: #dde3ef; border-color: #263553; }
+  .ft-btn-danger { background: rgba(242,85,85,0.15); color: #f25555; border-color: rgba(242,85,85,0.3); }
+  .ft-btn-danger:hover:not(:disabled) { background: rgba(242,85,85,0.25); }
+  .ft-btn-ghost { background: transparent; color: #8a96b0; }
+  .ft-btn-ghost:hover:not(:disabled) { background: #1a2540; color: #dde3ef; }
+  .ft-btn-icon { background: transparent; color: #4a5568; padding: 5px; }
+  .ft-btn-icon:hover:not(:disabled) { background: #1a2540; color: #dde3ef; }
+
+  /* ── Fort Input ────────────────────────────────────── */
+  .ft-input {
+    width: 100%; background: #0f1526; border: 1px solid #1e2d47;
+    border-radius: 3px; padding: 6px 10px;
+    font-size: 12px; color: #dde3ef;
+    outline: none; transition: border-color 0.15s;
+  }
+  .ft-input::placeholder { color: #4a5568; }
+  .ft-input:focus { border-color: #f26d21; box-shadow: 0 0 0 2px rgba(242,109,33,0.15); }
+  .ft-select { appearance: none; cursor: pointer; }
+  .ft-textarea { font-family: 'JetBrains Mono', monospace; resize: vertical; }
+
+  /* ── Status dots ───────────────────────────────────── */
+  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+  .status-ok       { background: #3ecf8e; box-shadow: 0 0 6px rgba(62,207,142,0.5); }
+  .status-warn     { background: #f5a623; }
+  .status-critical { background: #f25555; box-shadow: 0 0 6px rgba(242,85,85,0.5); }
+  .status-inactive { background: #4a5568; }
+  .status-running  { background: #4a9ff5; animation: pulse 1.5s ease-in-out infinite; }
+
+  /* ── Progress bar ──────────────────────────────────── */
+  .ft-progress { height: 4px; border-radius: 2px; background: #0f1526; overflow: hidden; }
+  .ft-progress-bar { height: 100%; border-radius: 2px; background: #f26d21; transition: width 0.3s; }
+
+  /* ── Nav item ──────────────────────────────────────── */
+  .nav-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px; border-radius: 3px;
+    font-size: 12px; color: #8a96b0;
+    cursor: pointer; user-select: none;
+    transition: all 0.12s; border-left: 2px solid transparent;
+    text-decoration: none;
+  }
+  .nav-item:hover { background: #1a2540; color: #dde3ef; }
+  .nav-item.active {
+    background: rgba(242,109,33,0.12);
+    color: #f26d21;
+    border-left-color: #f26d21;
+    padding-left: 10px;
+  }
+  .nav-group-label {
+    padding: 12px 12px 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #4a5568;
+  }
+
+  /* ── Metric tile ───────────────────────────────────── */
+  .metric-tile { padding: 14px 16px; }
+  .metric-value { font-size: 26px; font-weight: 700; line-height: 1; color: #dde3ef; }
+  .metric-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #8a96b0; margin-top: 4px; }
+  .metric-sub { font-size: 10px; color: #4a5568; margin-top: 2px; }
+
+  /* ── Code block ────────────────────────────────────── */
+  .ft-code {
+    background: #0a0e1a; border: 1px solid #1e2d47; border-radius: 3px;
+    padding: 10px 12px; font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #dde3ef; overflow-x: auto; white-space: pre;
+  }
+  .ft-tag {
+    display: inline-block; padding: 1px 6px;
+    background: #1a2540; border: 1px solid #1e2d47; border-radius: 3px;
+    font-size: 10px; color: #8a96b0;
+  }
+}
+
+/* Apex dark overrides */
+.apexcharts-canvas, .apexcharts-canvas svg { background: transparent !important; }
+.apexcharts-tooltip { background: #141d30 !important; border-color: #1e2d47 !important; color: #dde3ef !important; font-size: 12px !important; }
+.apexcharts-tooltip-title { background: #0f1526 !important; border-color: #1e2d47 !important; }
+.apexcharts-menu { background: #141d30 !important; border-color: #1e2d47 !important; }
+.apexcharts-menu-item:hover { background: #1a2540 !important; }
+
+/* diff2html dark */
+.d2h-wrapper .d2h-file-wrapper { background: #141d30 !important; border-color: #1e2d47 !important; }
+.d2h-wrapper .d2h-file-header  { background: #0f1526 !important; border-color: #1e2d47 !important; color: #8a96b0 !important; }
+.d2h-wrapper td.d2h-code-side-line { background: #141d30 !important; color: #dde3ef !important; }
+.d2h-wrapper .d2h-code-line-ctn { background: #141d30 !important; color: #dde3ef !important; }
+.d2h-wrapper .d2h-ins td { background: rgba(62,207,142,0.08) !important; }
+.d2h-wrapper .d2h-del td { background: rgba(242,85,85,0.08) !important; }
+.d2h-wrapper .d2h-cntx td { background: #141d30 !important; }
+.d2h-wrapper .d2h-code-linenumber { background: #0f1526 !important; border-color: #1e2d47 !important; color: #4a5568 !important; }
