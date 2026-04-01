@@ -13,3 +13,13 @@ apscheduler
 sse-starlette
 python-multipart
 aiofiles
+lizard
+radon
+bandit
+ruff
+vulture
+pip-audit
+detect-secrets
+checkov
+pytest
+pytest-asyncio
