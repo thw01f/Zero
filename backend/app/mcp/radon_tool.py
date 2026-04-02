@@ -1,5 +1,3 @@
-import asyncio, json
-from pathlib import Path
 from typing import List
 from .base import BaseTool, Finding
 
@@ -7,31 +5,33 @@ from .base import BaseTool, Finding
 class RadonTool(BaseTool):
     name = "radon"
     languages = ["python"]
-    category = "debt"
-    binary = "radon"
+    category = "quality"
 
     async def run(self, repo_path: str, language: str) -> List[Finding]:
-        findings = []
+        if language not in self.languages:
+            return []
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "radon", "mi", repo_path, "-j",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
-            data = json.loads(stdout)
-            for file_path, mi_score in data.items():
-                score = mi_score if isinstance(mi_score, (int, float)) else mi_score.get("mi", 100)
-                if score < 20:
-                    findings.append(Finding(
-                        file_path=file_path,
-                        line_start=1,
-                        severity="major",
-                        category="debt",
-                        rule_id="MI_LOW",
-                        message=f"Maintainability Index is {score:.1f} (very low — hard to maintain)",
-                        tool="radon",
-                    ))
+            import radon.complexity as rc
+            import radon.visitors
+            from radon.raw import analyze
+            from pathlib import Path
+            findings = []
+            for pyfile in Path(repo_path).rglob("*.py"):
+                try:
+                    src = pyfile.read_text(errors="replace")
+                    blocks = rc.cc_visit(src)
+                    for b in blocks:
+                        if b.complexity > 10:
+                            sev = "critical" if b.complexity > 20 else "major"
+                            findings.append(Finding(
+                                file_path=str(pyfile), line_start=b.lineno,
+                                severity=sev, category="quality",
+                                rule_id="radon-cc",
+                                message=f"'{b.name}' cyclomatic complexity: {b.complexity}",
+                                tool="radon",
+                            ))
+                except Exception:
+                    pass
+            return findings
         except Exception:
-            pass
-        return findings
+            return []
