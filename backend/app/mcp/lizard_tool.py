@@ -4,38 +4,27 @@ from .base import BaseTool, Finding
 
 class LizardTool(BaseTool):
     name = "lizard"
-    languages = ["all"]
-    category = "debt"
-    binary = ""
-
-    def _available(self) -> bool:
-        try:
-            import lizard
-            return True
-        except ImportError:
-            return False
+    languages = ["python", "javascript", "typescript", "java", "go", "c", "cpp"]
+    category = "quality"
 
     async def run(self, repo_path: str, language: str) -> List[Finding]:
+        if language not in self.languages:
+            return []
         try:
             import lizard
-            results = lizard.analyze([repo_path])
+            result = lizard.analyze([repo_path])
+            findings = []
+            for f in result:
+                for fn in f.function_list:
+                    if fn.cyclomatic_complexity > 10:
+                        sev = "critical" if fn.cyclomatic_complexity > 25 else "major" if fn.cyclomatic_complexity > 15 else "minor"
+                        findings.append(Finding(
+                            file_path=f.filename, line_start=fn.start_line,
+                            severity=sev, category="quality",
+                            rule_id="high-ccn",
+                            message=f"Function '{fn.name}' has cyclomatic complexity {fn.cyclomatic_complexity}",
+                            tool="lizard",
+                        ))
+            return findings
         except Exception:
             return []
-
-        findings = []
-        for file_info in results:
-            for func in file_info.function_list:
-                ccn = func.cyclomatic_complexity
-                if ccn >= 10:
-                    severity = "critical" if ccn >= 15 else "major"
-                    findings.append(Finding(
-                        file_path=file_info.filename,
-                        line_start=func.start_line,
-                        line_end=func.end_line,
-                        severity=severity,
-                        category="debt",
-                        rule_id="CCN_HIGH",
-                        message=f"Function '{func.name}' has cyclomatic complexity {ccn} (threshold: 10)",
-                        tool="lizard",
-                    ))
-        return findings
