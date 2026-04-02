@@ -1,4 +1,4 @@
-import asyncio
+import asyncio, re
 from typing import List
 from .base import BaseTool, Finding
 
@@ -6,40 +6,27 @@ from .base import BaseTool, Finding
 class VultureTool(BaseTool):
     name = "vulture"
     languages = ["python"]
-    category = "debt"
+    category = "quality"
     binary = "vulture"
 
     async def run(self, repo_path: str, language: str) -> List[Finding]:
+        if language not in self.languages or not self._available():
+            return []
         try:
             proc = await asyncio.create_subprocess_exec(
                 "vulture", repo_path, "--min-confidence", "80",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
-            lines = stdout.decode(errors="replace").splitlines()
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60)
+            findings = []
+            for line in stdout.decode().splitlines():
+                m = re.match(r"(.+):(\d+): (.+) \((.+)\)", line)
+                if m:
+                    findings.append(Finding(
+                        file_path=m.group(1), line_start=int(m.group(2)),
+                        severity="info", category="quality",
+                        rule_id="dead-code", message=m.group(3), tool="vulture",
+                    ))
+            return findings
         except Exception:
             return []
-
-        findings = []
-        for line in lines:
-            # format: path:line: message (confidence X%)
-            try:
-                parts = line.split(":", 2)
-                if len(parts) < 3:
-                    continue
-                file_path = parts[0]
-                line_no = int(parts[1])
-                msg = parts[2].strip()
-                findings.append(Finding(
-                    file_path=file_path,
-                    line_start=line_no,
-                    severity="minor",
-                    category="debt",
-                    rule_id="dead-code",
-                    message=msg,
-                    tool="vulture",
-                ))
-            except Exception:
-                continue
-        return findings
