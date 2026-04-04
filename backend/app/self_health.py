@@ -45,3 +45,50 @@ async def capture_snapshot() -> dict:
         if req.exists():
             proc = await asyncio.create_subprocess_exec(
                 "pip-audit", "-r", str(req), "--format", "json", "--progress-spinner", "off",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+            data = json.loads(stdout)
+            own_cves = sum(len(v.get("vulns", [])) for v in data.get("dependencies", []))
+    except Exception:
+        pass
+
+    # Redis queue depth
+    redis_depth = 0
+    try:
+        import redis as r
+        from .config import settings
+        rc = r.Redis.from_url(settings.redis_url)
+        redis_depth = rc.llen("celery")
+    except Exception:
+        pass
+
+    status = "healthy"
+    if own_cves > 0:
+        status = "degraded"
+    if disk_free_gb < 1.0:
+        status = "critical"
+
+    snap = {
+        "id": str(uuid.uuid4()),
+        "captured_at": datetime.datetime.utcnow().isoformat(),
+        "scanner_versions": versions,
+        "own_cve_count": own_cves,
+        "disk_free_gb": disk_free_gb,
+        "redis_queue_depth": redis_depth,
+        "last_advisory_poll": None,
+        "celery_workers": 1,
+        "status": status,
+    }
+
+    # Persist
+    try:
+        db = SessionLocal()
+        db.add(SelfHealthSnapshot(**snap))
+        db.commit()
+        db.close()
+    except Exception as e:
+        logger.warning(f"Self-health persist failed: {e}")
+
+    return snap
