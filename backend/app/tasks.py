@@ -69,3 +69,75 @@ async def _scan_pipeline(job_id: str, repo_url: str, language: str, standards_do
             j = db.query(Job).filter(Job.id == job_id).first()
             if j:
                 j.progress = msg.get("progress", j.progress)
+                db.commit()
+        except Exception:
+            pass
+
+    async def ws_send(msg):
+        ws(msg)
+
+    try:
+        # 1. Clone
+        ws({"event": "progress", "stage": "cloning", "progress": 5})
+        clone_repo(repo_url, repo_path)
+        ws({"event": "progress", "stage": "cloned", "progress": 8})
+
+        # 2. Language detect
+        if language == "auto":
+            language = detect_language(repo_path)
+            j = db.query(Job).filter(Job.id == job_id).first()
+            if j:
+                j.language = language
+                db.commit()
+
+        # 3. Prep
+        loc_map = count_loc(repo_path, language)
+        churn_map = compute_churn(repo_path)
+        ws({"event": "progress", "stage": "analyzing", "progress": 10})
+
+        # 4. Scanner ensemble
+        orchestrator.register_tools()
+        raw_findings = await orchestrator.run_all(repo_path, language, ws_send)
+        ws({"event": "progress", "stage": "scan_complete", "progress": 50})
+
+        # 5. LLM triage
+        ws({"event": "llm_start", "stage": "triage", "progress": 52})
+        triaged = await triage_findings(raw_findings)
+        ws({"event": "llm_done", "stage": "triage", "progress": 65})
+
+        # 6. Fix generation
+        sast_findings = [f for f in triaged if f.category != "misconfig"]
+        with_fixes = await generate_fixes(sast_findings, repo_path, language, standards_doc)
+        ws({"event": "llm_done", "stage": "fixes", "progress": 75})
+
+        # 7. Misconfig remediation
+        misconfig_findings = [f for f in triaged if f.category == "misconfig"]
+        with_remediations = await generate_misconfig_remediation(misconfig_findings, repo_path)
+        ws({"event": "llm_done", "stage": "misconfigs", "progress": 80})
+
+        # 8. Module aggregation
+        modules_data = aggregate_modules(triaged, loc_map, churn_map, repo_path)
+        ws({"event": "progress", "stage": "debt_scored", "progress": 83})
+
+        # 9. Compliance mapping
+        compliance = map_findings_to_compliance(triaged)
+        persist_compliance(job_id, compliance, db)
+        ws({"event": "progress", "stage": "compliance", "progress": 86})
+
+        # 10. Persist issues
+        fix_map = {id(f): diff for f, diff in with_fixes}
+        for f in triaged:
+            if f.category == "misconfig":
+                continue
+            issue = Issue(
+                id=str(uuid.uuid4()),
+                job_id=job_id,
+                file_path=f.file_path,
+                line_start=f.line_start,
+                line_end=f.line_end,
+                severity=f.severity,
+                category=f.category,
+                rule_id=f.rule_id,
+                message=f.message,
+                tool=f.tool,
+                owasp_category=f.owasp_category,
