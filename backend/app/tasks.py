@@ -212,3 +212,74 @@ async def _scan_pipeline(job_id: str, repo_url: str, language: str, standards_do
         ws({"event": "error", "message": str(e), "progress": -1})
         raise
     finally:
+        shutil.rmtree(repo_path, ignore_errors=True)
+
+
+@celery_app.task(name="app.tasks.monitor_advisories_task")
+def monitor_advisories_task():
+    asyncio.run(_monitor_advisories())
+
+
+async def _monitor_advisories():
+    from .monitor.nvd_feed import fetch_recent_cves
+    from .database import SessionLocal
+    from .models import Advisory
+    import uuid
+
+    db = SessionLocal()
+    try:
+        cves = await fetch_recent_cves(hours=settings.advisory_poll_hours)
+        for item in cves:
+            cve = item.get("cve", {})
+            cve_id = cve.get("id", "")
+            if not cve_id:
+                continue
+            existing = db.query(Advisory).filter(Advisory.advisory_id == cve_id).first()
+            if existing:
+                continue
+            metrics = cve.get("metrics", {})
+            cvss = None
+            for key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
+                if key in metrics and metrics[key]:
+                    cvss = metrics[key][0].get("cvssData", {}).get("baseScore")
+                    break
+            severity = "info"
+            if cvss:
+                if cvss >= 9.0: severity = "critical"
+                elif cvss >= 7.0: severity = "major"
+                elif cvss >= 4.0: severity = "minor"
+
+            descs = cve.get("descriptions", [])
+            desc_text = next((d["value"] for d in descs if d.get("lang") == "en"), "")
+            db.add(Advisory(
+                id=str(uuid.uuid4()),
+                source="nvd",
+                advisory_id=cve_id,
+                severity=severity,
+                cvss_score=cvss,
+                title=cve_id + ": " + desc_text[:100],
+                description=desc_text[:500],
+                advisory_url=f"https://nvd.nist.gov/vuln/detail/{cve_id}",
+            ))
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Advisory monitor failed: {e}")
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.tasks.self_health_task")
+def self_health_task():
+    asyncio.run(_self_health())
+
+
+async def _self_health():
+    from .self_health import capture_snapshot
+    from .ws_manager import sse_manager
+    snap = await capture_snapshot()
+    if snap["status"] != "healthy":
+        try:
+            loop = asyncio.get_event_loop()
+            await sse_manager.publish({"type": "self_health_alert", "data": snap})
+        except Exception:
+            pass
