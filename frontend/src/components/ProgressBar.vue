@@ -18,6 +18,5 @@
   </div>
 </template>
 <script setup lang="ts">
-import { useScanStore } from '../stores/scan'
-const scanStore = useScanStore()
+// TODO: implement logic
 </script>
