@@ -14,28 +14,6 @@
     </div>
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed } from 'vue'
-
-const props = defineProps<{
-  label: string
-  value: number | string
-  sub?: string
-  color?: 'green' | 'red' | 'orange' | 'blue' | 'yellow' | 'default'
-  icon?: string
-}>()
-
-const colorMap: Record<string, string> = {
-  green: '#3ecf8e',
-  red: '#f25555',
-  orange: '#f26d21',
-  blue: '#4a9ff5',
-  yellow: '#f5a623',
-  default: '#dde3ef',
-}
-
-const valueStyle = computed(() => ({
-  color: colorMap[props.color ?? 'default'] ?? colorMap.default,
-}))
+// TODO: implement logic
 </script>
