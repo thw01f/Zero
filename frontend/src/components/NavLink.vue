@@ -7,9 +7,5 @@
   </RouterLink>
 </template>
 <script setup lang="ts">
-import { computed } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
-const props = defineProps<{ path: string; icon: string; label: string; badge?: number }>()
-const route = useRoute()
-const isActive = computed(() => route.path === props.path)
+// TODO: implement logic
 </script>
