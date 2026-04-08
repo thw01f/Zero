@@ -143,64 +143,6 @@
         </div>
       </div>
     </template>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useReportStore } from '../stores/report'
-import { useScanStore } from '../stores/scan'
-import StatCard from '../components/StatCard.vue'
-
-const report = useReportStore()
-const scan = useScanStore()
-
-function gradeToColor(g: string): 'green' | 'blue' | 'yellow' | 'orange' | 'red' | 'default' {
-  const map: Record<string, 'green' | 'blue' | 'yellow' | 'orange' | 'red'> = {
-    A: 'green', B: 'blue', C: 'yellow', D: 'orange', F: 'red',
-  }
-  return map[g] ?? 'default'
-}
-
-const topCritical = computed(() => report.criticalIssues.slice(0, 5))
-
-const top5Modules = computed(() =>
-  [...report.modules].sort((a: any, b: any) => b.debt_score - a.debt_score).slice(0, 5)
-)
-
-const categoryChartOpts = computed(() => ({
-  chart: { background: 'transparent', foreColor: '#8a96b0', toolbar: { show: false } },
-  theme: { mode: 'dark' },
-  labels: Object.keys(report.data?.issues_by_category || {}),
-  colors: ['#f25555', '#f26d21', '#f5a623', '#3ecf8e', '#4a9ff5', '#a78bfa', '#26c6da'],
-  legend: { position: 'bottom', fontSize: '11px', labels: { colors: '#8a96b0' } },
-  dataLabels: { enabled: false },
-  stroke: { width: 1, colors: ['#141d30'] },
-  plotOptions: { pie: { donut: { size: '60%' } } },
-  tooltip: { theme: 'dark' },
-}))
-
-const categorySeries = computed(() =>
-  Object.values(report.data?.issues_by_category || {}) as number[]
-)
-
-const moduleChartOpts = computed(() => ({
-  chart: { background: 'transparent', foreColor: '#8a96b0', toolbar: { show: false } },
-  theme: { mode: 'dark' },
-  xaxis: {
-    categories: top5Modules.value.map((m: any) => m.path?.split('/').pop() ?? m.path),
-    labels: { style: { colors: '#8a96b0', fontSize: '11px' } },
-  },
-  yaxis: { labels: { style: { colors: '#8a96b0', fontSize: '11px' } } },
-  colors: ['#f26d21'],
-  dataLabels: { enabled: false },
-  plotOptions: { bar: { horizontal: true, borderRadius: 2, barHeight: '60%' } },
-  grid: { borderColor: '#1e2d47' },
-  tooltip: { theme: 'dark' },
-}))
-
-const moduleSeries = computed(() => [{
-  name: 'Debt Score',
-  data: top5Modules.value.map((m: any) => m.debt_score ?? 0),
-}])
+// TODO: implement logic
 </script>
