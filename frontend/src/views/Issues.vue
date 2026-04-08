@@ -97,5 +97,72 @@
                 </tr>
               </template>
 <script setup lang="ts">
-// TODO: implement logic
+import { ref, computed } from 'vue'
+import { useReportStore } from '../stores/report'
+
+const report = useReportStore()
+const search = ref('')
+const filterSev = ref('')
+const filterCat = ref('')
+const sortBy = ref('severity')
+const page = ref(0)
+const expanded = ref(new Set<string>())
+const PER_PAGE = 20
+
+const sevOrder: Record<string, number> = { critical: 0, major: 1, minor: 2, info: 3 }
+
+const categories = computed(() => {
+  const cats = new Set<string>()
+  report.issues.forEach((i: any) => { if (i.category) cats.add(i.category) })
+  return [...cats].sort()
+})
+
+const filtered = computed(() => {
+  let items = [...report.issues] as any[]
+  if (filterSev.value) items = items.filter(i => i.severity === filterSev.value)
+  if (filterCat.value) items = items.filter(i => i.category === filterCat.value)
+  if (search.value) {
+    const q = search.value.toLowerCase()
+    items = items.filter(i =>
+      (i.message || '').toLowerCase().includes(q) ||
+      (i.file_path || '').toLowerCase().includes(q) ||
+      (i.rule_id || '').toLowerCase().includes(q) ||
+      (i.tool || '').toLowerCase().includes(q)
+    )
+  }
+  items.sort((a, b) => {
+    if (sortBy.value === 'severity') return (sevOrder[a.severity] ?? 9) - (sevOrder[b.severity] ?? 9)
+    if (sortBy.value === 'file') return (a.file_path || '').localeCompare(b.file_path || '')
+    if (sortBy.value === 'tool') return (a.tool || '').localeCompare(b.tool || '')
+    return 0
+  })
+  return items
+})
+
+const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / PER_PAGE)))
+const paginated = computed(() => filtered.value.slice(page.value * PER_PAGE, (page.value + 1) * PER_PAGE))
+
+function toggleExpand(id: string) {
+  const s = new Set(expanded.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  expanded.value = s
+}
+
+function truncatePath(p: string) {
+  if (!p) return ''
+  const parts = p.split('/')
+  return parts.length > 3 ? '.../' + parts.slice(-2).join('/') : p
+}
+
+function exportCsv() {
+  const headers = ['severity', 'category', 'file_path', 'line_start', 'rule_id', 'message', 'owasp_category', 'cwe_id', 'tool']
+  const rows = filtered.value.map((i: any) =>
+    headers.map(h => JSON.stringify(i[h] ?? '')).join(',')
+  )
+  const csv = [headers.join(','), ...rows].join('\n')
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+  a.download = 'issues.csv'
+  a.click()
+}
 </script>
