@@ -75,5 +75,19 @@
       </div>
     </template>
 <script setup lang="ts">
-// TODO: implement logic
+import { ref, computed } from 'vue'
+import { useReportStore } from '../stores/report'
+
+const report = useReportStore()
+const filter = ref('ALL')
+
+const filtered = computed(() =>
+  filter.value === 'ALL'
+    ? report.depUpdates
+    : report.depUpdates.filter((u: any) => u.classification === filter.value)
+)
+
+function copy(cmd: string) {
+  navigator.clipboard.writeText(cmd).catch(() => {})
+}
 </script>
