@@ -95,5 +95,55 @@
   </div>
 </template>
 <script setup lang="ts">
-// TODO: implement logic
+import { ref, watch, onMounted, onUnmounted } from 'vue'
+import axios from 'axios'
+
+const advisories = ref<any[]>([])
+const loading = ref(false)
+const unreadOnly = ref(false)
+const autoRefresh = ref(true)
+let intervalId: ReturnType<typeof setInterval> | null = null
+
+async function load() {
+  loading.value = true
+  try {
+    const { data } = await axios.get('/api/advisories', { params: { unread_only: unreadOnly.value } })
+    advisories.value = data
+  } catch {
+    // silent fail for advisory feed
+  } finally {
+    loading.value = false
+  }
+}
+
+async function mark(id: string) {
+  await axios.post(`/api/advisories/${id}/read`).catch(() => {})
+  await load()
+}
+
+async function markAll() {
+  await Promise.all(
+    advisories.value.filter(a => !a.is_read).map(a => axios.post(`/api/advisories/${a.id}/read`).catch(() => {}))
+  )
+  await load()
+}
+
+function formatDate(d: string) {
+  if (!d) return '—'
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+watch(autoRefresh, (enabled) => {
+  if (intervalId) clearInterval(intervalId)
+  if (enabled) intervalId = setInterval(load, 30000)
+})
+
+onMounted(() => {
+  load()
+  if (autoRefresh.value) intervalId = setInterval(load, 30000)
+})
+
+onUnmounted(() => {
+  if (intervalId) clearInterval(intervalId)
+})
 </script>
