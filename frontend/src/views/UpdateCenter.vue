@@ -68,6 +68,14 @@
           </div>
         </div>
       </template>
+
+      <div v-if="!report.depUpdates.length" class="ft-card ft-card-body text-center py-8">
+        <div class="text-xs" style="color:#4a5568">No dependency updates found</div>
+      </div>
+    </template>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useReportStore } from '../stores/report'
