@@ -69,5 +69,38 @@
         </div>
       </template>
 <script setup lang="ts">
-// TODO: implement logic
+import { ref, computed } from 'vue'
+import { useReportStore } from '../stores/report'
+
+const report = useReportStore()
+const activeFilter = ref('ALL')
+
+const mandatory = computed(() => report.depUpdates.filter((u: any) => u.classification === 'MANDATORY'))
+
+const CLASSIFICATIONS = ['MANDATORY', 'SUGGESTED', 'OPTIONAL', 'INFORMATIONAL']
+
+function countFor(f: string) {
+  if (f === 'ALL') return report.depUpdates.length
+  return report.depUpdates.filter((u: any) => u.classification === f).length
+}
+
+const filteredItems = computed(() =>
+  activeFilter.value === 'ALL'
+    ? report.depUpdates
+    : report.depUpdates.filter((u: any) => u.classification === activeFilter.value)
+)
+
+const groupedFiltered = computed(() => {
+  const order = activeFilter.value === 'ALL' ? CLASSIFICATIONS : [activeFilter.value]
+  return order
+    .map(label => ({
+      label,
+      items: (filteredItems.value as any[]).filter(u => u.classification === label),
+    }))
+    .filter(g => g.items.length > 0)
+})
+
+function copy(cmd: string) {
+  navigator.clipboard.writeText(cmd).catch(() => {})
+}
 </script>
