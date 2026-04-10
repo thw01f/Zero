@@ -73,52 +73,6 @@
         </div>
       </div>
     </template>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useReportStore } from '../stores/report'
-
-const report = useReportStore()
-const sortField = ref<'churn_count' | 'debt_score' | 'loc' | 'path'>('churn_count')
-
-const sortedModules = computed(() =>
-  [...report.modules].sort((a: any, b: any) => {
-    if (sortField.value === 'path') return (a.path || '').localeCompare(b.path || '')
-    return (b[sortField.value] ?? 0) - (a[sortField.value] ?? 0)
-  })
-)
-
-const top10 = computed(() =>
-  [...report.modules]
-    .sort((a: any, b: any) => (b.churn_count ?? 0) - (a.churn_count ?? 0))
-    .slice(0, 10)
-)
-
-const churnOpts = computed(() => ({
-  chart: { background: 'transparent', foreColor: '#8a96b0', toolbar: { show: false } },
-  theme: { mode: 'dark' },
-  xaxis: {
-    categories: top10.value.map((m: any) => m.path?.split('/').pop() ?? m.path),
-    labels: { style: { colors: '#8a96b0', fontSize: '10px' } },
-  },
-  yaxis: { labels: { style: { colors: '#8a96b0', fontSize: '10px' } } },
-  colors: ['#f26d21'],
-  dataLabels: { enabled: false },
-  plotOptions: { bar: { borderRadius: 2, horizontal: false, columnWidth: '60%' } },
-  grid: { borderColor: '#1e2d47' },
-  tooltip: { theme: 'dark' },
-}))
-
-const churnSeries = computed(() => [{
-  name: 'Churn Count',
-  data: top10.value.map((m: any) => m.churn_count ?? 0),
-}])
-
-function debtColor(score: number) {
-  if (score >= 70) return '#f25555'
-  if (score >= 40) return '#f5a623'
-  return '#3ecf8e'
-}
+// TODO: implement logic
 </script>
