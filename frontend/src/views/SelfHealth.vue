@@ -102,5 +102,91 @@
       </div>
     </template>
 <script setup lang="ts">
-// TODO: implement logic
+import { ref, computed, onMounted } from 'vue'
+import axios from 'axios'
+
+const health = ref<any>(null)
+const models = ref<any[]>([])
+const loading = ref(true)
+
+const SCANNERS = ['bandit', 'ruff', 'lizard', 'gitleaks', 'trivy', 'hadolint', 'checkov']
+
+const scannerVersions = computed(() => {
+  if (!health.value?.scanner_versions) {
+    return Object.fromEntries(SCANNERS.map(s => [s, 'unknown']))
+  }
+  return health.value.scanner_versions
+})
+
+const platformServices = computed(() => {
+  const h = health.value
+  return [
+    {
+      name: 'API',
+      status: h ? 'Online' : 'Unknown',
+      dot: h ? 'status-ok' : 'status-inactive',
+      color: h ? '#3ecf8e' : '#8a96b0',
+      detail: null,
+    },
+    {
+      name: 'Database',
+      status: h?.db_ok === false ? 'Degraded' : h ? 'Online' : 'Unknown',
+      dot: h?.db_ok === false ? 'status-warn' : h ? 'status-ok' : 'status-inactive',
+      color: h?.db_ok === false ? '#f5a623' : '#3ecf8e',
+      detail: null,
+    },
+    {
+      name: 'Redis',
+      status: h?.redis_ok === false ? 'Degraded' : h ? 'Online' : 'Unknown',
+      dot: h?.redis_ok === false ? 'status-warn' : h ? 'status-ok' : 'status-inactive',
+      color: h?.redis_ok === false ? '#f5a623' : '#3ecf8e',
+      detail: h?.redis_queue_depth != null ? `Queue: ${h.redis_queue_depth}` : null,
+    },
+    {
+      name: 'LLM Backend',
+      status: models.value.length ? 'Online' : h ? 'Unknown' : 'Unknown',
+      dot: models.value.length ? 'status-ok' : 'status-inactive',
+      color: models.value.length ? '#3ecf8e' : '#8a96b0',
+      detail: models.value.length ? `${models.value.length} model(s)` : null,
+    },
+  ]
+})
+
+function scannerDot(ver: string) {
+  if (ver === 'missing') return 'status-critical'
+  if (ver === 'error') return 'status-warn'
+  return 'status-ok'
+}
+
+function scannerColor(ver: string) {
+  if (ver === 'missing') return '#f25555'
+  if (ver === 'error') return '#f5a623'
+  return '#3ecf8e'
+}
+
+function statusColor(s: string) {
+  return { healthy: '#3ecf8e', degraded: '#f5a623', critical: '#f25555' }[s] ?? '#8a96b0'
+}
+
+function formatDate(d: string) {
+  if (!d) return '—'
+  return new Date(d).toLocaleString()
+}
+
+onMounted(async () => {
+  loading.value = true
+  try {
+    const [healthRes, modelsRes] = await Promise.allSettled([
+      axios.get('/api/health'),
+      axios.get('/api/analyze/models'),
+    ])
+    if (healthRes.status === 'fulfilled') health.value = healthRes.value.data
+    if (modelsRes.status === 'fulfilled') {
+      const d = modelsRes.value.data
+      models.value = Array.isArray(d) ? d : (d.data ?? d.models ?? [])
+    }
+  } finally {
+    loading.value = false
+  }
+})
 </script>
