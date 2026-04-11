@@ -112,6 +112,9 @@
         </div>
       </div>
     </template>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useScanStore } from '../stores/scan'
