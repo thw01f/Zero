@@ -26,7 +26,7 @@ class BanditTool(BaseTool):
         findings = []
         for r in data.get("results", []):
             findings.append(Finding(
-                file_path=r.get("filename", ""),
+                file_path=r.get("filename", "").replace(repo_path, "").lstrip("/"),
                 line_start=r.get("line_number", 0),
                 severity=SEV_MAP.get(r.get("issue_severity", "LOW"), "minor"),
                 category="security",
