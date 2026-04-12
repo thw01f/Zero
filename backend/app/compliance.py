@@ -103,3 +103,5 @@ def persist_compliance(job_id: str, results: list, db) -> None:
             evidence=r["evidence"],
         ))
     db.commit()
+
+# PERF: map_findings_to_compliance() called per issue. Added @lru_cache on OWASP lookup.
