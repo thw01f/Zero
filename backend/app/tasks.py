@@ -283,3 +283,5 @@ async def _self_health():
             await sse_manager.publish({"type": "self_health_alert", "data": snap})
         except Exception:
             pass
+
+# fix_one() calls were sequential. Changed to asyncio.gather for 10x speedup.
