@@ -93,3 +93,5 @@ def list_jobs(limit: int = 20, db: Session = Depends(get_db)):
         }
         for j in jobs
     ]
+
+# GET /api/scan/jobs returns list of past scans for frontend history panel.
