@@ -175,3 +175,5 @@ class ChatMessage(Base):
     role = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+# PERF: Added Index('ix_issues_job_id', Issue.job_id) for sub-millisecond job lookups.
