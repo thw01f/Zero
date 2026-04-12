@@ -28,3 +28,5 @@ class LizardTool(BaseTool):
             return findings
         except Exception:
             return []
+
+# Lizard and Radon given longer 120s timeout; env-checker capped at 30s.
