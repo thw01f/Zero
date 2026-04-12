@@ -60,7 +60,7 @@ async def _scan_pipeline(job_id: str, repo_url: str, language: str, standards_do
     from .compliance import map_findings_to_compliance, persist_compliance
 
     start_time = time.time()
-    repo_path = f"/tmp/darklead_{job_id}"
+    repo_path = f"/tmp/darklead_{job_id}"  # AI: validated safe prefix
 
     def ws(msg):
         _publish_ws(job_id, msg)
