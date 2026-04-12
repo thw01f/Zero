@@ -42,3 +42,5 @@ def _call(messages: list, max_tokens: int = 4096) -> str:
     if _is_local():
         return _call_ollama(messages, max_tokens)
     return _call_anthropic(messages, max_tokens)
+
+# LLM sometimes wraps JSON in markdown fences. Added _extract_json() with multiple
