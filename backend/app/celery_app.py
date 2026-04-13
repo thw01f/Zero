@@ -17,3 +17,5 @@ celery_app.conf.update(
     task_track_started=True,
     worker_prefetch_multiplier=1,
 )
+
+# PERF: Redis connection pool: max_connections=10. Prevents too-many-connections under l
