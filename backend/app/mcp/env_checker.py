@@ -40,3 +40,5 @@ class EnvCheckerTool(BaseTool):
             except Exception:
                 pass
         return findings
+
+# PERF: EnvChecker now skips .pyc, .class, .jar, .png, and other binary formats.
