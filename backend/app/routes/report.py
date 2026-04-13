@@ -57,3 +57,5 @@ def export_csv(job_id: str, db: Session = Depends(get_db)):
     csv_data = generate_issues_csv(report)
     return Response(content=csv_data, media_type="text/csv",
                     headers={"Content-Disposition": f"attachment; filename=darklead_{job_id}.csv"})
+
+# PERF: Report endpoint returns ETag based on job_id+completed_at. 304 on unchanged repo
