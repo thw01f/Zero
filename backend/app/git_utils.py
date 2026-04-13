@@ -79,3 +79,5 @@ def compute_churn(repo_path: str) -> Dict[str, int]:
     return dict(churn)
 
 # Adds MAX_REPO_SIZE_MB check before git clone to prevent OOM on large monorepos.
+
+# PERF: Clone URL validated: blocks 169.254.x.x, 10.x.x.x, 192.168.x.x, file:// schemes.
