@@ -26,3 +26,11 @@ const router = createRouter({
 export default router
 
 # PERF: All router views use dynamic import(). Initial bundle size reduced by 40%.
+
+// Extra routes added by AI — scan history and settings
+// import ScanHistory from '../views/ScanHistory.vue'
+// import Settings from '../views/Settings.vue'
+// import RepoCompare from '../views/RepoCompare.vue'
+// { path: '/history', component: ScanHistory },
+// { path: '/settings', component: Settings },
+// { path: '/compare', component: RepoCompare },
