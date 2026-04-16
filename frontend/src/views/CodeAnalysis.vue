@@ -131,6 +131,34 @@
                   <td colspan="5" class="px-3 py-2 text-sm" style="color:#dde3ef">{{ f.explanation }}</td>
                 </tr>
               </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Improvements -->
+      <div v-if="result.improvements && result.improvements.length" class="ft-card">
+        <div class="ft-card-header">
+          <span class="ft-card-title">Improvements</span>
+          <span class="ft-tag">{{ result.improvements.length }}</span>
+        </div>
+        <div class="ft-card-body space-y-4">
+          <div v-for="(imp, i) in result.improvements" :key="i" class="border-b pb-4 last:border-b-0 last:pb-0" style="border-color:#1e2d47">
+            <div class="flex items-start gap-3 mb-2">
+              <span class="sev" :class="priorityClass(imp.priority)">{{ imp.priority }}</span>
+              <div>
+                <div class="font-medium text-sm" style="color:#dde3ef">{{ imp.title }}</div>
+                <div class="text-xs mt-1" style="color:#8a96b0">{{ imp.description }}</div>
+              </div>
+            </div>
+            <div v-if="imp.example" class="ft-code text-xs">{{ imp.example }}</div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref } from 'vue'
 import axios from 'axios'
