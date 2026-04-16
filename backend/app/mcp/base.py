@@ -1,19 +1,17 @@
 from dataclasses import dataclass, field
-from abc import ABC, abstractmethod
 from typing import Optional, List
-import shutil
 
 
 @dataclass
 class Finding:
-    file_path: str
-    line_start: int
-    severity: str           # critical|major|minor|info
-    category: str           # security|smell|debt|secret|dep|misconfig
-    rule_id: str
-    message: str
-    tool: str
+    file_path: str = ""
+    line_start: int = 0
     line_end: Optional[int] = None
+    severity: str = "info"
+    category: str = "quality"
+    rule_id: Optional[str] = None
+    message: str = ""
+    tool: str = ""
     resource_type: Optional[str] = None
     check_id: Optional[str] = None
     owasp_category: Optional[str] = None
@@ -21,20 +19,17 @@ class Finding:
     llm_explanation: Optional[str] = None
 
 
-class BaseTool(ABC):
-    name: str = "base"
-    languages: List[str] = ["all"]
-    category: str = "security"
-    binary: str = ""
-
-    def is_applicable(self, language: str) -> bool:
-        return "all" in self.languages or language in self.languages
+class BaseTool:
+    name: str = ""
+    languages: List[str] = []
+    category: str = "quality"
+    binary: Optional[str] = None
 
     def _available(self) -> bool:
-        if not self.binary:
-            return True
-        return shutil.which(self.binary) is not None
+        import shutil
+        if self.binary:
+            return shutil.which(self.binary) is not None
+        return True
 
-    @abstractmethod
     async def run(self, repo_path: str, language: str) -> List[Finding]:
-        ...
+        raise NotImplementedError
