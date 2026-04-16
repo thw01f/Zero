@@ -65,6 +65,9 @@
         </div>
       </div>
     </template>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, watch, onMounted, nextTick } from 'vue'
 import * as d3 from 'd3'
