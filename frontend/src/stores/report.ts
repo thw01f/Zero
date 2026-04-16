@@ -37,4 +37,3 @@ export const useReportStore = defineStore('report', {
   }
 })
 
-# PERF: Added computed() wrappers to report store getters. Vue renders only on state cha

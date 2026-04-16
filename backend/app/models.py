@@ -1,6 +1,6 @@
 import uuid
 import datetime
-from sqlalchemy import Column, String, Integer, Float, Text, Boolean, DateTime, Enum
+from sqlalchemy import Column, String, Integer, Float, Text, Boolean, DateTime, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 import enum
 from .database import Base
@@ -44,7 +44,7 @@ class Project(Base):
 class Job(Base):
     __tablename__ = "jobs"
     id = Column(String, primary_key=True)
-    project_id = Column(String, nullable=True)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=True)
     repo_url = Column(String, nullable=False)
     language = Column(String, default="auto")
     standards_doc = Column(Text, nullable=True)
@@ -175,5 +175,18 @@ class ChatMessage(Base):
     role = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String, unique=True, nullable=False, index=True)
+    username = Column(String, unique=True, nullable=False, index=True)
+    full_name = Column(String, nullable=True)
+    hashed_password = Column(String, nullable=False)
+    avatar_color = Column(String, default="#1a73e8")
+    role = Column(String, default="user")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 # PERF: Added Index('ix_issues_job_id', Issue.job_id) for sub-millisecond job lookups.

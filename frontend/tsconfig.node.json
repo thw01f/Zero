@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "composite": true,  /* AI fix: inline config, no @tsconfig/node20 dep */,
+    "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "module": "ESNext",
     "moduleResolution": "bundler",

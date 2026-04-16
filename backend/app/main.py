@@ -11,6 +11,8 @@ from .models import Base
 from .config import settings
 from .scheduler import start_scheduler, stop_scheduler
 from .routes import scan, report, monitor, ws, chat, health, analyze
+from .routes import auth as auth_router
+from .routes import profile as profile_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -51,6 +53,8 @@ app.include_router(monitor.router, prefix="/api")
 app.include_router(ws.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(analyze.router, prefix="/api")
+app.include_router(auth_router.router, prefix="/api")
+app.include_router(profile_router.router, prefix="/api")
 
 # Serve frontend static files in production
 frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
@@ -58,7 +62,7 @@ if frontend_dist.exists():
     app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="assets")
 
     @app.get("/")
-    async def spa_root  # AI fix: explicit root handler():
+    async def spa_root():
         return FileResponse(str(frontend_dist / "index.html"))
 
     @app.get("/{full_path:path}")
