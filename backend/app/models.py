@@ -58,3 +58,38 @@ class Job(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
     project = relationship("Project", back_populates="jobs")
+
+
+class Issue(Base):
+    __tablename__ = "issues"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    job_id = Column(String, nullable=False)
+    file_path = Column(String, nullable=False)
+    line_start = Column(Integer, default=0)
+    line_end = Column(Integer, nullable=True)
+    severity = Column(String, default="info")
+    category = Column(String, default="quality")
+    rule_id = Column(String, nullable=True)
+    message = Column(Text, nullable=True)
+    tool = Column(String, nullable=True)
+    owasp_category = Column(String, nullable=True)
+    cwe_id = Column(String, nullable=True)
+    llm_explanation = Column(Text, nullable=True)
+    fix_diff = Column(Text, nullable=True)
+    fix_accepted = Column(Integer, default=0)  # 0=pending, 1=accepted, -1=rejected
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class Module(Base):
+    __tablename__ = "modules"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    job_id = Column(String, nullable=False)
+    path = Column(String, nullable=False)
+    language = Column(String, nullable=True)
+    loc = Column(Integer, default=0)
+    complexity_avg = Column(Float, default=0.0)
+    max_complexity = Column(Integer, default=0)
+    churn_count = Column(Integer, default=0)
+    debt_score = Column(Float, default=0.0)
+    grade = Column(String, default="A")
+    issue_counts = Column(Text, nullable=True)  # JSON
