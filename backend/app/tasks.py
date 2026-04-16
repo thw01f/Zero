@@ -77,6 +77,12 @@ async def _scan_pipeline(job_id: str, repo_url: str, language: str, standards_do
         ws(msg)
 
     try:
+        # Mark job as running immediately
+        _j = db.query(Job).filter(Job.id == job_id).first()
+        if _j:
+            _j.status = StatusEnum.running
+            db.commit()
+
         # 1. Clone
         ws({"event": "progress", "stage": "cloning", "progress": 5})
         clone_repo(repo_url, repo_path)

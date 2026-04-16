@@ -13,9 +13,13 @@ router = APIRouter(prefix="/scan", tags=["scan"])
 
 
 def _try_celery(job_id: str, repo_url: str, language: str, standards_doc):
-    """Returns True if Celery task was enqueued, False if Celery/Redis unavailable."""
+    """Returns True only if a Celery worker is actually available to process the task."""
     try:
-        from ..tasks import run_scan_task
+        from ..tasks import celery_app, run_scan_task
+        inspect = celery_app.control.inspect(timeout=1.0)
+        active = inspect.active()
+        if not active:
+            return False
         run_scan_task.delay(job_id, repo_url, language, standards_doc)
         return True
     except Exception:

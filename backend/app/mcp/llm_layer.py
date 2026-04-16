@@ -17,14 +17,15 @@ def _get_backend() -> tuple[str, str]:
             return ov["provider"], ov["model"]
     except Exception:
         pass
-    # Gemini key → prefer Gemini
-    if settings.gemini_api_key and len(settings.gemini_api_key) > 10:
-        return "gemini", "gemini-2.5-flash"
+    # Explicit local mode → Ollama first
+    if settings.use_local_llm:
+        return "ollama", settings.ollama_model
     # HF token set → prefer HF
     if settings.hf_api_token and settings.hf_api_token.startswith("hf_"):
         return "huggingface", settings.hf_model
-    if settings.use_local_llm:
-        return "ollama", settings.ollama_model
+    # Gemini as fallback cloud option
+    if settings.gemini_api_key and len(settings.gemini_api_key) > 10:
+        return "gemini", "gemini-2.5-flash"
     if settings.anthropic_api_key.startswith("sk-ant-your") or settings.anthropic_api_key == "sk-ant-changeme":
         return "ollama", settings.ollama_model
     return "anthropic", settings.model
@@ -60,7 +61,7 @@ def _call_ollama(messages: list, max_tokens: int = 4096, model: str | None = Non
 def _call_huggingface(messages: list, max_tokens: int = 4096, model: str | None = None) -> str:
     import httpx
     m = model or settings.hf_model
-    url = f"https://api-inference.huggingface.co/models/{m}/v1/chat/completions"
+    url = f"https://router.huggingface.co/hf-inference/models/{m}/v1/chat/completions"
     payload = {
         "model": m,
         "messages": messages,
@@ -118,6 +119,144 @@ def _extract_json(text: str) -> dict:
         if m:
             return json.loads(m.group())
         return {}
+
+
+def _call_with_retry(messages: list, max_tokens: int = 1024, retries: int = 2) -> str:
+    """Call LLM with simple retry + backoff for rate limits."""
+    import time
+    for attempt in range(retries + 1):
+        try:
+            return _call(messages, max_tokens)
+        except Exception as e:
+            if "429" in str(e) and attempt < retries:
+                time.sleep(2 ** attempt)
+                continue
+            raise
+
+
+async def triage_findings(findings: list) -> list:
+    """Enrich top-priority findings with LLM explanations, CWE IDs, OWASP categories."""
+    if not findings:
+        return findings
+    loop = asyncio.get_event_loop()
+    result = list(findings)
+    sev_order = {"critical": 0, "major": 1, "minor": 2, "info": 3}
+    priority = sorted(range(len(findings)), key=lambda i: sev_order.get(findings[i].severity, 4))[:20]
+    batch_size = min(settings.llm_fix_batch_size, 20)
+    for chunk_start in range(0, len(priority), batch_size):
+        idxs = priority[chunk_start:chunk_start + batch_size]
+        batch = [findings[i] for i in idxs]
+        items = [{"idx": j, "rule": f.rule_id or "", "sev": f.severity,
+                  "file": f.file_path, "line": f.line_start, "msg": f.message[:150]}
+                 for j, f in enumerate(batch)]
+        prompt = (
+            "Security expert: enrich these findings with CWE ID, OWASP category, 1-sentence explanation.\n"
+            'JSON array only: [{"idx":0,"cwe_id":"CWE-89","owasp":"A03:2021","explanation":"..."},...]\n\n'
+            f"{json.dumps(items)}"
+        )
+        try:
+            raw = await loop.run_in_executor(None, lambda p=prompt: _call_with_retry(
+                [{"role": "user", "content": p}], 1024))
+            enriched = _extract_json(raw)
+            if isinstance(enriched, list):
+                for e in enriched:
+                    j = e.get("idx", -1)
+                    if 0 <= j < len(batch):
+                        if e.get("cwe_id"):      batch[j].cwe_id = e["cwe_id"]
+                        if e.get("owasp"):       batch[j].owasp_category = e["owasp"]
+                        if e.get("explanation"): batch[j].llm_explanation = e["explanation"]
+        except Exception as ex:
+            logger.warning(f"Triage batch {chunk_start} failed: {ex}")
+    return result
+
+
+async def generate_fixes(findings: list, repo_path: str, language: str, standards_doc) -> list:
+    """Generate fix diffs for top findings. Returns list of (Finding, diff_str) tuples."""
+    if not findings:
+        return []
+    from pathlib import Path
+    loop = asyncio.get_event_loop()
+    sev_order = {"critical": 0, "major": 1, "minor": 2, "info": 3}
+    to_fix = sorted(findings, key=lambda f: sev_order.get(f.severity, 4))[:10]
+    fix_ids = {id(f) for f in to_fix}
+    to_skip = [f for f in findings if id(f) not in fix_ids]
+    results: list = [(f, "") for f in to_skip]
+    batch_size = min(settings.llm_fix_batch_size, 5)
+    for i in range(0, len(to_fix), batch_size):
+        batch = to_fix[i:i + batch_size]
+        snippets = []
+        for f in batch:
+            try:
+                fp = Path(repo_path) / f.file_path
+                lines = fp.read_text(errors="replace").splitlines()
+                start = max(0, f.line_start - 3)
+                end = min(len(lines), (f.line_end or f.line_start) + 3)
+                snippet = "\n".join(lines[start:end])
+            except Exception:
+                snippet = ""
+            snippets.append({"rule": f.rule_id or f.message[:60], "file": f.file_path,
+                              "line": f.line_start, "snippet": snippet[:300]})
+        prompt = (
+            f"Fix these {language} security issues. Minimal unified diff per item.\n"
+            'JSON array: [{"idx":0,"diff":"--- a/f\\n+++ b/f\\n@@...@@\\n-old\\n+new"},...]\n\n'
+            f"{json.dumps(snippets)}"
+        )
+        try:
+            raw = await loop.run_in_executor(None, lambda p=prompt: _call_with_retry(
+                [{"role": "user", "content": p}], 2048))
+            fixes = _extract_json(raw)
+            fix_map = {}
+            if isinstance(fixes, list):
+                fix_map = {item.get("idx", -1): item.get("diff", "") for item in fixes}
+            for j, f in enumerate(batch):
+                results.append((f, fix_map.get(j, "")))
+        except Exception as ex:
+            logger.warning(f"Fix batch {i} failed: {ex}")
+            results.extend((f, "") for f in batch)
+    return results
+
+
+async def generate_misconfig_remediation(findings: list, repo_path: str) -> list:
+    """Generate remediation advice for misconfig findings. Returns (Finding, advice) tuples."""
+    if not findings:
+        return []
+    loop = asyncio.get_event_loop()
+    results = []
+    to_process = findings[:20]
+    results.extend((f, "Review and apply security best practices for this configuration.")
+                   for f in findings[20:])
+    for f in to_process:
+        prompt = (
+            f"Infrastructure misconfig:\nFile: {f.file_path}\nIssue: {f.message}\n"
+            "2-sentence remediation. Plain text only."
+        )
+        try:
+            advice = await loop.run_in_executor(None, lambda p=prompt: _call_with_retry(
+                [{"role": "user", "content": p}], 256))
+            results.append((f, advice.strip()))
+        except Exception:
+            results.append((f, "Review and apply security best practices for this configuration."))
+    return results
+
+
+async def generate_summary(repo_url: str, language: str, stats: dict,
+                           top_issues: list, top_mods: list) -> str:
+    """Generate executive summary narrative for the scan report."""
+    prompt = (
+        f"Write a 3-4 sentence executive security summary for a {language} repo: {repo_url}\n"
+        f"Stats: {json.dumps(stats)}\n"
+        f"Top issues: {json.dumps(top_issues[:5])}\n"
+        f"Riskiest modules: {json.dumps(top_mods)}\n"
+        "Be specific, actionable, professional. Plain text."
+    )
+    loop = asyncio.get_event_loop()
+    try:
+        return await loop.run_in_executor(None, lambda: _call(
+            [{"role": "user", "content": prompt}], 512))
+    except Exception:
+        c = stats.get("critical", 0)
+        return (f"Analysis of {repo_url} found {stats.get('total', 0)} issues "
+                f"({c} critical). Immediate remediation recommended for critical findings.")
 
 
 async def analyze_code_snippet(code: str, language: str, filename: str, mode: str) -> dict:

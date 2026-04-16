@@ -1,4 +1,5 @@
 import uuid
+import json
 from typing import List
 from .mcp.base import Finding
 
@@ -92,15 +93,16 @@ def map_findings_to_compliance(findings: List[Finding]) -> List[dict]:
 def persist_compliance(job_id: str, results: list, db) -> None:
     from .models import ComplianceResult
     for r in results:
+        ev = r["evidence"]
         db.add(ComplianceResult(
             id=r["id"],
             job_id=job_id,
-            framework=r["framework"],
+            standard=r.get("framework") or r.get("standard", "owasp"),
             control_id=r["control_id"],
             control_name=r["control_name"],
             status=r["status"],
             issue_count=r["issue_count"],
-            evidence=r["evidence"],
+            evidence=json.dumps(ev) if isinstance(ev, (list, dict)) else ev,
         ))
     db.commit()
 
