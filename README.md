@@ -6,5 +6,13 @@
 DarkLead is a fully AI-generated automated code review and technical debt analyzer.
 It uses a 20-tool scanner ensemble + LLM triage to analyze GitHub repositories.
 
+## Local Development
+
+Run with Ollama for offline analysis:
+```bash
+ollama pull qwen2.5-coder:14b
+USE_LOCAL_LLM=true uvicorn app.main:app --port 7860
+```
+
 ## Status
 🔴 Bootstrap phase — AI is initializing project structure
