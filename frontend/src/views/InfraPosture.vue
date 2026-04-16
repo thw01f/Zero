@@ -79,6 +79,18 @@
                     </td>
                   </tr>
                 </template>
+                <tr v-if="!filtered.length">
+                  <td colspan="6" class="text-center py-8" style="color:#4a5568">No findings for selected filter</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+    </template>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useReportStore } from '../stores/report'
