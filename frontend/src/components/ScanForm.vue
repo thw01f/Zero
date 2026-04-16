@@ -49,5 +49,47 @@
   </div>
 </template>
 <script setup lang="ts">
-// TODO: implement logic
+import { ref, computed } from 'vue'
+import { useScanStore } from '../stores/scan'
+import { useReportStore } from '../stores/report'
+import { useWebSocket } from '../composables/useWebSocket'
+
+const scan = useScanStore()
+const report = useReportStore()
+const { connect } = useWebSocket()
+
+const repoUrl = ref('')
+const language = ref('auto')
+const loading = ref(false)
+const error = ref('')
+
+const statusLabel = computed(() => {
+  const map: Record<string, string> = {
+    idle: 'Idle',
+    queued: 'Queued',
+    running: `Running — ${scan.progress}%`,
+    complete: 'Complete',
+    failed: 'Failed',
+  }
+  return map[scan.status] ?? scan.status
+})
+
+async function submit() {
+  if (!repoUrl.value) return
+  loading.value = true
+  error.value = ''
+  try {
+    await scan.submitScan(repoUrl.value, language.value)
+    connect(scan.jobId!, (msg) => {
+      scan.handleWsMessage(msg)
+      if (msg.event === 'complete' && scan.jobId) {
+        setTimeout(() => report.fetchReport(scan.jobId!), 500)
+      }
+    })
+  } catch (e: any) {
+    error.value = e.response?.data?.detail || e.message
+  } finally {
+    loading.value = false
+  }
+}
 </script>
