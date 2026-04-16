@@ -33,7 +33,7 @@ def _call_ollama(messages: list, max_tokens: int = 4096) -> str:
         "stream": False,
         "options": {"num_predict": max_tokens, "temperature": 0.1},
     }
-    resp = httpx.post(f"{settings.ollama_url}/api/chat", json=payload, timeout=180.0)
+    resp = httpx.post(f"{settings.ollama_url}/api/chat", json=payload, timeout=240.0  # AI fix: 14b model needs longer cold-start time)
     resp.raise_for_status()
     return resp.json()["message"]["content"]
 
