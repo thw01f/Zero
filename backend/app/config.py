@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     use_local_llm: bool = False
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5-coder:14b"
+    # Hugging Face Inference API
+    hf_api_token: str = ""
+    hf_model: str = "Qwen/Qwen2.5-Coder-32B-Instruct"
     # Infrastructure
     redis_url: str = "redis://localhost:6379/0"
     database_url: str = "sqlite:///./darklead.db"

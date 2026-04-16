@@ -17,6 +17,9 @@ def _get_backend() -> tuple[str, str]:
             return ov["provider"], ov["model"]
     except Exception:
         pass
+    # HF token set → prefer HF
+    if settings.hf_api_token and settings.hf_api_token.startswith("hf_"):
+        return "huggingface", settings.hf_model
     if settings.use_local_llm:
         return "ollama", settings.ollama_model
     if settings.anthropic_api_key.startswith("sk-ant-your") or settings.anthropic_api_key == "sk-ant-changeme":
@@ -51,10 +54,32 @@ def _call_ollama(messages: list, max_tokens: int = 4096, model: str | None = Non
     return resp.json()["message"]["content"]
 
 
+def _call_huggingface(messages: list, max_tokens: int = 4096, model: str | None = None) -> str:
+    import httpx
+    m = model or settings.hf_model
+    url = f"https://api-inference.huggingface.co/models/{m}/v1/chat/completions"
+    payload = {
+        "model": m,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": 0.1,
+        "stream": False,
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.hf_api_token}",
+        "Content-Type": "application/json",
+    }
+    resp = httpx.post(url, json=payload, headers=headers, timeout=120.0)
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
+
+
 def _call(messages: list, max_tokens: int = 4096) -> str:
     provider, model = _get_backend()
     if provider == "ollama":
         return _call_ollama(messages, max_tokens, model)
+    if provider == "huggingface":
+        return _call_huggingface(messages, max_tokens, model)
     return _call_anthropic(messages, max_tokens, model)
 
 def _extract_json(text: str) -> dict:
