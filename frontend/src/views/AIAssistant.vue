@@ -91,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onMounted } from 'vue'
 import axios from 'axios'
 import { useScanStore } from '../stores/scan'
 
@@ -130,6 +130,17 @@ async function scrollToBottom() {
     messagesEl.value.scrollTop = messagesEl.value.scrollHeight
   }
 }
+
+onMounted(async () => {
+  if (!scan.jobId) return
+  try {
+    const { data } = await axios.get(`/api/chat/${scan.jobId}/history`)
+    if (data.messages?.length) {
+      messages.value = data.messages.map((m: any) => ({ role: m.role, content: m.content }))
+      await scrollToBottom()
+    }
+  } catch {}
+})
 
 async function send() {
   if (!input.value.trim() || !scan.jobId) return

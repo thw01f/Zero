@@ -106,8 +106,16 @@ def get_job(job_id: str, db: Session = Depends(get_db)):
 
 @router.get("/jobs")
 def list_jobs(limit: int = 20, db: Session = Depends(get_db)):
-    from ..models import Job
+    from ..models import Job, Issue
+    from sqlalchemy import func
     jobs = db.query(Job).order_by(Job.created_at.desc()).limit(limit).all()
+    # Count issues per job in one query
+    counts = dict(
+        db.query(Issue.job_id, func.count(Issue.id))
+        .filter(Issue.job_id.in_([j.id for j in jobs]))
+        .group_by(Issue.job_id)
+        .all()
+    )
     return [
         {
             "job_id": j.id,
@@ -117,6 +125,7 @@ def list_jobs(limit: int = 20, db: Session = Depends(get_db)):
             "progress": j.progress,
             "grade": j.overall_grade,
             "debt_score": j.overall_debt_score,
+            "issue_count": counts.get(j.id, 0),
             "scan_time_ms": j.scan_time_ms,
             "created_at": j.created_at.isoformat(),
         }

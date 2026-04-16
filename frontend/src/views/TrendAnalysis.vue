@@ -1,65 +1,142 @@
 <template>
   <div class="space-y-4">
-    <div class="ft-card-title" style="font-size:11px;letter-spacing:0.12em">TREND ANALYSIS</div>
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="ft-card-title" style="font-size:11px;letter-spacing:0.12em">TREND ANALYSIS</div>
+        <div class="text-xs mt-0.5" style="color:#4a5568">Historical view across all scans</div>
+      </div>
+      <button class="ft-btn ft-btn-secondary" @click="load">Refresh</button>
+    </div>
 
-    <div v-if="!report.data" class="ft-card ft-card-body text-center py-12">
-      <div class="text-sm mb-1" style="color:#8a96b0">No scan loaded</div>
-      <div class="text-xs" style="color:#4a5568">Load a scan to see trend data</div>
+    <div v-if="loading" class="ft-card ft-card-body text-center py-8">
+      <div class="flex items-center justify-center gap-2">
+        <span class="status-dot status-running"></span>
+        <span class="text-xs" style="color:#8a96b0">Loading trend data...</span>
+      </div>
+    </div>
+
+    <div v-else-if="!history.length" class="ft-card ft-card-body text-center py-12">
+      <div class="text-sm mb-1" style="color:#8a96b0">No scan history yet</div>
+      <div class="text-xs" style="color:#4a5568">Run multiple scans to track trends over time</div>
     </div>
 
     <template v-else>
-      <!-- Info banner -->
-      <div class="ft-card ft-card-body" style="border-left:2px solid #4a9ff5">
-        <div class="text-xs" style="color:#8a96b0">
-          Trend tracking requires multiple scans of the same project. Showing current scan snapshot below.
-          Register a project with auto-rescan to track changes over time.
+      <!-- Summary stat cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="ft-widget metric-tile">
+          <div class="metric-value" style="color:#4a9ff5">{{ history.length }}</div>
+          <div class="metric-label">Total Scans</div>
+        </div>
+        <div class="ft-widget metric-tile">
+          <div class="metric-value" style="color:#f25555">{{ totalCritical }}</div>
+          <div class="metric-label">Avg Critical / Scan</div>
+        </div>
+        <div class="ft-widget metric-tile">
+          <div class="metric-value" :class="'grade-' + (latestGrade || 'f')">{{ latestGrade || '?' }}</div>
+          <div class="metric-label">Latest Grade</div>
+        </div>
+        <div class="ft-widget metric-tile">
+          <div class="metric-value" style="color:#dde3ef">{{ avgDebt }}</div>
+          <div class="metric-label">Avg Debt Score</div>
         </div>
       </div>
 
-      <!-- Current snapshot bar chart -->
+      <!-- Issue count trend -->
       <div class="ft-card">
-        <div class="ft-card-header"><span class="ft-card-title">Issue Severity Distribution — Current Scan</span></div>
+        <div class="ft-card-header">
+          <span class="ft-card-title">Issues Over Time</span>
+          <span class="ft-tag">{{ history.length }} scans</span>
+        </div>
         <div class="ft-card-body">
           <apexchart
-            type="bar"
+            type="line"
             height="240"
-            :options="sevOpts"
-            :series="sevSeries"
+            :key="'trend-' + history.length"
+            :options="trendOpts"
+            :series="trendSeries"
           />
         </div>
       </div>
 
-      <!-- Category breakdown -->
+      <!-- Debt score trend -->
       <div class="ft-card">
-        <div class="ft-card-header"><span class="ft-card-title">Issues by Category</span></div>
+        <div class="ft-card-header"><span class="ft-card-title">Debt Score Trend</span></div>
         <div class="ft-card-body">
           <apexchart
-            v-if="catSeries.length"
-            type="bar"
-            height="200"
-            :options="catOpts"
-            :series="[{ name: 'Issues', data: catCounts }]"
+            type="area"
+            height="180"
+            :key="'debt-' + history.length"
+            :options="debtOpts"
+            :series="debtSeries"
           />
-          <div v-else class="text-center py-8 text-xs" style="color:#4a5568">No category data</div>
         </div>
       </div>
 
-      <!-- Debt message -->
-      <div class="ft-card">
-        <div class="ft-card-header"><span class="ft-card-title">Debt Score Summary</span></div>
-        <div class="ft-card-body">
-          <div class="flex items-center gap-4">
-            <div class="text-5xl font-bold" :class="'grade-' + (report.data.overall_grade ?? 'F')">
-              {{ report.data.overall_grade ?? '?' }}
-            </div>
-            <div>
-              <div class="text-2xl font-bold" style="color:#dde3ef">{{ report.data.overall_debt_score ?? '—' }}</div>
-              <div class="text-xs" style="color:#8a96b0">Debt Score / 100</div>
-              <div class="text-xs mt-1" style="color:#4a5568">
-                {{ debtMessage }}
+      <!-- Current scan breakdown (if report loaded) -->
+      <template v-if="report.data">
+        <div class="ft-card">
+          <div class="ft-card-header"><span class="ft-card-title">Current Scan — Severity Distribution</span></div>
+          <div class="ft-card-body">
+            <apexchart
+              type="bar"
+              height="200"
+              :options="sevOpts"
+              :series="sevSeries"
+            />
+          </div>
+        </div>
+
+        <div class="ft-card">
+          <div class="ft-card-header"><span class="ft-card-title">Current Scan — Debt Summary</span></div>
+          <div class="ft-card-body">
+            <div class="flex items-center gap-6">
+              <div class="text-5xl font-bold" :class="'grade-' + (report.data.overall_grade ?? 'F')">
+                {{ report.data.overall_grade ?? '?' }}
+              </div>
+              <div>
+                <div class="text-2xl font-bold" style="color:#dde3ef">{{ report.data.overall_debt_score ?? '—' }}</div>
+                <div class="text-xs" style="color:#8a96b0">Debt Score</div>
+                <div class="text-xs mt-1" style="color:#4a5568">{{ debtMessage }}</div>
+              </div>
+              <div class="ml-auto text-right">
+                <div class="text-xs" style="color:#4a5568">Repo</div>
+                <div class="text-xs font-mono" style="color:#dde3ef">{{ shortRepo(report.data.repo_url) }}</div>
               </div>
             </div>
           </div>
+        </div>
+      </template>
+
+      <!-- Scan history table -->
+      <div class="ft-card">
+        <div class="ft-card-header"><span class="ft-card-title">All Scans</span></div>
+        <div style="overflow-x:auto">
+          <table class="ft-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Repository</th>
+                <th>Grade</th>
+                <th>Debt</th>
+                <th>Issues</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="j in history" :key="j.job_id">
+                <td style="font-size:11px;color:#4a5568;white-space:nowrap">{{ fmtDate(j.created_at) }}</td>
+                <td class="font-mono text-xs" style="color:#8a96b0;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                  {{ shortRepo(j.repo_url) }}
+                </td>
+                <td>
+                  <span class="font-bold" :class="'grade-' + (j.grade?.toLowerCase() || 'f')">{{ j.grade || '—' }}</span>
+                </td>
+                <td style="color:#dde3ef">{{ j.debt_score ?? '—' }}</td>
+                <td :style="{ color: j.issue_count > 0 ? '#f25555' : '#3ecf8e', fontWeight: 600 }">{{ j.issue_count ?? 0 }}</td>
+                <td style="font-size:11px;color:#4a5568">{{ j.scan_time_ms ? (j.scan_time_ms/1000).toFixed(1)+'s' : '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </template>
@@ -67,27 +144,87 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useReportStore } from '../stores/report'
 
 const report = useReportStore()
+const history = ref<any[]>([])
+const loading = ref(false)
 
-const sevOpts = computed(() => ({
-  chart: { background: 'transparent', foreColor: '#8a96b0', toolbar: { show: false } },
+async function load() {
+  loading.value = true
+  try {
+    const token = localStorage.getItem('dl_token') || ''
+    const r = await fetch('/api/scan/jobs?limit=50', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    const d = await r.json()
+    const all = (Array.isArray(d) ? d : (d.jobs ?? []))
+    history.value = all.filter((j: any) => j.status === 'complete')
+  } catch {
+    history.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(load)
+
+const totalCritical = computed(() => {
+  if (!history.value.length) return 0
+  // We don't have per-sev breakdown here; just show average total issues
+  const avg = history.value.reduce((s: number, j: any) => s + (j.issue_count ?? 0), 0) / history.value.length
+  return Math.round(avg)
+})
+
+const latestGrade = computed(() => history.value[0]?.grade ?? null)
+const avgDebt = computed(() => {
+  const vals = history.value.map((j: any) => j.debt_score).filter((v: any) => v != null)
+  if (!vals.length) return '—'
+  return (vals.reduce((a: number, b: number) => a + b, 0) / vals.length).toFixed(1)
+})
+
+const labels = computed(() => history.value.map((j: any) =>
+  new Date(j.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+).reverse())
+
+const trendSeries = computed(() => [{
+  name: 'Issues',
+  data: [...history.value].reverse().map((j: any) => j.issue_count ?? 0),
+}])
+
+const trendOpts = computed(() => ({
+  chart: { background: 'transparent', foreColor: '#8a96b0', toolbar: { show: false }, zoom: { enabled: false } },
   theme: { mode: 'dark' },
-  xaxis: {
-    categories: ['Critical', 'Major', 'Minor', 'Info'],
-    labels: { style: { colors: '#8a96b0', fontSize: '11px' } },
-  },
-  yaxis: { labels: { style: { colors: '#8a96b0', fontSize: '11px' } } },
-  colors: ['#f25555', '#f26d21', '#f5a623', '#4a9ff5'],
-  dataLabels: { enabled: true, style: { fontSize: '11px', colors: ['#dde3ef'] } },
-  plotOptions: { bar: { borderRadius: 2, distributed: true, columnWidth: '50%' } },
-  legend: { show: false },
+  xaxis: { categories: labels.value, labels: { style: { colors: '#8a96b0', fontSize: '10px' } } },
+  yaxis: { labels: { style: { colors: '#8a96b0', fontSize: '10px' } } },
+  colors: ['#f25555'],
+  stroke: { width: 2, curve: 'smooth' },
+  markers: { size: 5 },
   grid: { borderColor: '#1e2d47' },
   tooltip: { theme: 'dark' },
+  dataLabels: { enabled: false },
 }))
 
+const debtSeries = computed(() => [{
+  name: 'Debt Score',
+  data: [...history.value].reverse().map((j: any) => j.debt_score ?? 0),
+}])
+
+const debtOpts = computed(() => ({
+  chart: { background: 'transparent', foreColor: '#8a96b0', toolbar: { show: false }, zoom: { enabled: false } },
+  theme: { mode: 'dark' },
+  xaxis: { categories: labels.value, labels: { style: { colors: '#8a96b0', fontSize: '10px' } } },
+  yaxis: { min: 0, max: 100, labels: { style: { colors: '#8a96b0', fontSize: '10px' } } },
+  colors: ['#f26d21'],
+  stroke: { width: 2, curve: 'smooth' },
+  fill: { type: 'gradient', gradient: { opacityFrom: 0.3, opacityTo: 0.05 } },
+  grid: { borderColor: '#1e2d47' },
+  tooltip: { theme: 'dark' },
+  dataLabels: { enabled: false },
+}))
+
+// Current scan breakdown
 const sevSeries = computed(() => [{
   name: 'Issues',
   data: [
@@ -98,26 +235,15 @@ const sevSeries = computed(() => [{
   ],
 }])
 
-const catEntries = computed(() =>
-  Object.entries(report.data?.issues_by_category ?? {})
-    .sort((a: any, b: any) => b[1] - a[1])
-    .slice(0, 8)
-)
-
-const catSeries = computed(() => catEntries.value.map(e => e[0]))
-const catCounts = computed(() => catEntries.value.map(e => e[1]))
-
-const catOpts = computed(() => ({
+const sevOpts = computed(() => ({
   chart: { background: 'transparent', foreColor: '#8a96b0', toolbar: { show: false } },
   theme: { mode: 'dark' },
-  xaxis: {
-    categories: catSeries.value,
-    labels: { style: { colors: '#8a96b0', fontSize: '11px' } },
-  },
+  xaxis: { categories: ['Critical', 'Major', 'Minor', 'Info'], labels: { style: { colors: '#8a96b0', fontSize: '11px' } } },
   yaxis: { labels: { style: { colors: '#8a96b0', fontSize: '11px' } } },
-  colors: ['#f26d21'],
-  dataLabels: { enabled: false },
-  plotOptions: { bar: { borderRadius: 2, horizontal: true } },
+  colors: ['#f25555', '#f26d21', '#f5a623', '#4a9ff5'],
+  dataLabels: { enabled: true, style: { fontSize: '11px', colors: ['#dde3ef'] } },
+  plotOptions: { bar: { borderRadius: 2, distributed: true, columnWidth: '50%' } },
+  legend: { show: false },
   grid: { borderColor: '#1e2d47' },
   tooltip: { theme: 'dark' },
 }))
@@ -125,8 +251,18 @@ const catOpts = computed(() => ({
 const debtMessage = computed(() => {
   const score = report.data?.overall_debt_score ?? 0
   if (score >= 80) return 'High technical debt — immediate remediation recommended'
-  if (score >= 60) return 'Moderate technical debt — schedule remediation in next sprint'
+  if (score >= 60) return 'Moderate technical debt — address in next sprint'
   if (score >= 40) return 'Manageable debt — address during routine maintenance'
   return 'Low technical debt — project is in good health'
 })
+
+function shortRepo(url: string) {
+  if (!url) return '—'
+  return url.replace('https://github.com/', '').replace('upload://', 'upload: ')
+}
+
+function fmtDate(d: string) {
+  if (!d) return '—'
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
+}
 </script>

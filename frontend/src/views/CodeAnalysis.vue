@@ -92,11 +92,11 @@
       </div>
 
       <!-- Static tools -->
-      <div v-if="result.tools_run && result.tools_run.length" class="ft-card">
+      <div v-if="toolsRun.length" class="ft-card">
         <div class="ft-card-header"><span class="ft-card-title">Static Analysis Tools</span></div>
         <div class="ft-card-body">
           <div class="flex flex-wrap gap-2">
-            <span v-for="t in result.tools_run" :key="t" class="ft-tag" style="color:#3ecf8e">{{ t }}</span>
+            <span v-for="t in toolsRun" :key="t" class="ft-tag" style="color:#3ecf8e">{{ t }}</span>
           </div>
         </div>
       </div>
@@ -160,7 +160,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import axios from 'axios'
 
 const code = ref('')
@@ -171,6 +171,7 @@ const loading = ref(false)
 const error = ref('')
 const result = ref<any>(null)
 const expandedFindings = ref(new Set<number>())
+const toolsRun = computed(() => result.value?.static_tools_run ?? result.value?.tools_run ?? [])
 
 async function analyze() {
   if (!code.value.trim()) return
