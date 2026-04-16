@@ -58,7 +58,7 @@ if frontend_dist.exists():
     app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="assets")
 
     @app.get("/")
-    async def spa_root():
+    async def spa_root  # AI fix: explicit root handler():
         return FileResponse(str(frontend_dist / "index.html"))
 
     @app.get("/{full_path:path}")
