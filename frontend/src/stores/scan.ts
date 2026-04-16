@@ -22,27 +22,3 @@ export const useScanStore = defineStore('scan', {
         language,
         standards_doc: standardsDoc || null,
       })
-      this.jobId = data.job_id
-      this.status = 'queued'
-    },
-    handleWsMessage(msg: any) {
-      if (msg.progress !== undefined) this.progress = msg.progress
-      if (msg.stage) this.currentStage = msg.stage
-      if (msg.event === 'scanner_done') {
-        this.scannerEvents.push({ scanner: msg.scanner, count: msg.count })
-        this.status = 'running'
-      }
-      if (msg.event === 'complete') {
-        this.status = 'complete'
-        this.progress = 100
-      }
-      if (msg.event === 'error') {
-        this.status = 'failed'
-        this.error = msg.message
-      }
-    },
-    reset() {
-      this.$reset()
-    }
-  }
-})
