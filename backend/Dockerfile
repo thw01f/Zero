@@ -33,3 +33,40 @@ RUN wget -q https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadol
 
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Stage 3: Final runtime image
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl supervisor redis-server \
+    libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python packages and binaries from builder
+COPY --from=py-builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=py-builder /usr/local/bin/uvicorn /usr/local/bin/uvicorn
+COPY --from=py-builder /usr/local/bin/celery /usr/local/bin/celery
+COPY --from=py-builder /usr/local/bin/gitleaks /usr/local/bin/gitleaks
+COPY --from=py-builder /usr/local/bin/trivy /usr/local/bin/trivy
+COPY --from=py-builder /usr/local/bin/hadolint /usr/local/bin/hadolint
+
+# Copy backend source
+COPY backend/ /app/backend/
+
+# Copy supervisord config
+COPY backend/supervisord.conf /etc/supervisor/conf.d/darklead.conf
+
+# Copy built frontend dist
+COPY --from=frontend-builder /frontend/dist /app/frontend/dist
+
+RUN mkdir -p /data /tmp/darklead_clones
+
+EXPOSE 7860
+
+ENV DATABASE_URL=sqlite:////data/darklead.db
+ENV REDIS_URL=redis://localhost:6379/0
+ENV PYTHONPATH=/app/backend
+
+CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/darklead.conf"]
