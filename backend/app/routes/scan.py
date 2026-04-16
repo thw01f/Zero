@@ -1,6 +1,9 @@
 import uuid
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+import shutil
+import tempfile
+from pathlib import Path
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Job, StatusEnum
@@ -38,12 +41,25 @@ def _run_in_background(job_id: str, repo_url: str, language: str, standards_doc)
     t.start()
 
 
+def _normalize_repo_url(url: str) -> str:
+    """Ensure GitHub/GitLab URLs are https:// and end without .git."""
+    url = url.strip()
+    # Handle shorthand like github.com/owner/repo or gitlab.com/owner/repo
+    if url and not url.startswith(("http://", "https://", "/", ".")):
+        url = "https://" + url
+    # Strip trailing .git for consistency
+    if url.endswith(".git"):
+        url = url[:-4]
+    return url
+
+
 @router.post("", response_model=ScanResponse, status_code=202)
 def submit_scan(req: ScanRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    repo_url = _normalize_repo_url(str(req.repo_url))
     job_id = str(uuid.uuid4())
     job = Job(
         id=job_id,
-        repo_url=str(req.repo_url),
+        repo_url=repo_url,
         language=req.language.value,
         standards_doc=req.standards_doc,
         project_id=req.project_id,
@@ -53,9 +69,8 @@ def submit_scan(req: ScanRequest, background_tasks: BackgroundTasks, db: Session
     db.add(job)
     db.commit()
 
-    if not _try_celery(job_id, str(req.repo_url), req.language.value, req.standards_doc):
-        # Celery not available — run directly in background thread
-        background_tasks.add_task(_run_in_background, job_id, str(req.repo_url), req.language.value, req.standards_doc)
+    if not _try_celery(job_id, repo_url, req.language.value, req.standards_doc):
+        background_tasks.add_task(_run_in_background, job_id, repo_url, req.language.value, req.standards_doc)
 
     return ScanResponse(job_id=job_id, status="queued", message="Scan enqueued")
 
@@ -93,5 +108,59 @@ def list_jobs(limit: int = 20, db: Session = Depends(get_db)):
         }
         for j in jobs
     ]
+
+@router.post("/upload", response_model=ScanResponse, status_code=202)
+async def upload_scan(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    file: UploadFile = File(...),
+    language: str = Form("auto"),
+    project_id: str = Form(None),
+):
+    """Accept a zip or tar.gz archive, extract it, and run the scan pipeline."""
+    suffix = Path(file.filename or "upload").suffix.lower()
+    allowed = {".zip", ".gz", ".tgz", ".tar"}
+    if suffix not in allowed:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type '{suffix}'. Use .zip or .tar.gz")
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="dl_upload_"))
+    archive_path = tmp_dir / (file.filename or "upload")
+    try:
+        with archive_path.open("wb") as f:
+            shutil.copyfileobj(file.file, f)
+        # Extract
+        extract_dir = tmp_dir / "src"
+        extract_dir.mkdir()
+        if suffix == ".zip":
+            import zipfile
+            with zipfile.ZipFile(archive_path) as z:
+                z.extractall(extract_dir)
+        else:
+            import tarfile
+            with tarfile.open(archive_path) as t:
+                t.extractall(extract_dir)
+    except Exception as e:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail=f"Failed to extract archive: {e}")
+
+    # Use local path as repo_url; pipeline handles both URLs and paths
+    repo_url = str(extract_dir)
+    job_id = str(uuid.uuid4())
+    job = Job(
+        id=job_id,
+        repo_url=f"upload://{file.filename}",
+        language=language,
+        project_id=project_id,
+        status=StatusEnum.queued,
+        progress=0,
+    )
+    db.add(job)
+    db.commit()
+
+    if not _try_celery(job_id, repo_url, language, None):
+        background_tasks.add_task(_run_in_background, job_id, repo_url, language, None)
+
+    return ScanResponse(job_id=job_id, status="queued", message="Upload scan enqueued")
+
 
 # GET /api/scan/jobs returns list of past scans for frontend history panel.

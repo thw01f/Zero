@@ -83,6 +83,11 @@
                   placeholder="github.com/owner/repo"
                   @keydown.enter="doScan" />
               </div>
+              <label class="scan-upload-btn" title="Upload zip/tar.gz">
+                <input type="file" accept=".zip,.tar,.gz,.tgz" style="display:none"
+                  @change="doUpload" :disabled="scanStore.status === 'running'" />
+                <AppIcon name="upload" :size="14" />
+              </label>
               <button class="scan-btn"
                 :class="{running: scanStore.status === 'running'}"
                 @click="doScan"
@@ -176,7 +181,7 @@ const searchQ      = ref('')
 const repoUrl      = ref('')
 const avatarWrap   = ref<HTMLElement | null>(null)
 
-const isAuthRoute = computed(() => ['/login', '/register'].includes(route.path))
+const isAuthRoute = computed(() => ['/login', '/register', '/demo'].includes(route.path))
 
 onMounted(() => {
   document.documentElement.setAttribute('data-theme', theme.value)
@@ -206,15 +211,40 @@ function doSearch() {
 async function doScan() {
   const url = repoUrl.value.trim()
   if (!url) return
-  const fullUrl = url.startsWith('http') ? url : `https://${url}`
   try {
     const r = await fetch('/api/scan', {
       method: 'POST',
       headers: { ...auth.authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_url: fullUrl }),
+      body: JSON.stringify({ repo_url: url }),
     })
     if (r.ok) { notifs.push('info', 'Scan queued', `Scanning ${url}…`); router.push('/') }
   } catch {}
+}
+
+async function doUpload(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  const form = new FormData()
+  form.append('file', file)
+  form.append('language', 'auto')
+  try {
+    const r = await fetch('/api/scan/upload', {
+      method: 'POST',
+      headers: auth.authHeaders(),
+      body: form,
+    })
+    if (r.ok) {
+      const d = await r.json()
+      notifs.push('info', 'Upload scan queued', `Scanning ${file.name}…`)
+      router.push('/')
+    } else {
+      const d = await r.json()
+      notifs.push('error', 'Upload failed', d.detail || 'Unknown error')
+    }
+  } catch (err) {
+    notifs.push('error', 'Upload failed', String(err))
+  }
+  ;(e.target as HTMLInputElement).value = ''
 }
 function timeAgo(ts: number): string {
   const m = Math.floor((Date.now() - ts) / 60000)
@@ -352,6 +382,12 @@ const navSections = [
   transition:border-color .15s;
 }
 .scan-input:focus { border-color:var(--gc-primary); }
+.scan-upload-btn {
+  width:30px; height:30px; flex-shrink:0; border-radius:6px; border:1px solid var(--gc-border);
+  background:var(--gc-surface-2); color:var(--gc-text-2); cursor:pointer;
+  display:flex; align-items:center; justify-content:center; transition:background .15s;
+}
+.scan-upload-btn:hover { background:var(--gc-primary-light); color:var(--gc-primary); border-color:var(--gc-primary); }
 .scan-btn {
   width:32px; height:32px; flex-shrink:0; border-radius:6px; border:none; cursor:pointer;
   background:var(--gc-primary); color:#fff; font-size:13px;

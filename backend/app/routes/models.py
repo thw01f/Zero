@@ -3,6 +3,12 @@ from fastapi import APIRouter
 import httpx
 from ..config import settings
 
+GEMINI_MODELS = [
+    {"id": "gemini-2.5-flash",  "name": "Gemini 2.5 Flash",  "provider": "gemini", "context": "1M",   "tier": "fast"},
+    {"id": "gemini-2.5-pro",    "name": "Gemini 2.5 Pro",    "provider": "gemini", "context": "1M",   "tier": "premium"},
+    {"id": "gemini-2.0-flash",  "name": "Gemini 2.0 Flash",  "provider": "gemini", "context": "1M",   "tier": "balanced"},
+]
+
 router = APIRouter(prefix="/models", tags=["models"])
 
 ANTHROPIC_MODELS = [
@@ -119,6 +125,12 @@ async def list_models():
     )
     result["providers"]["anthropic"] = {
         "name": "Anthropic Claude", "online": has_ant, "models": ANTHROPIC_MODELS,
+    }
+
+    # Gemini
+    has_gemini = bool(settings.gemini_api_key and len(settings.gemini_api_key) > 10)
+    result["providers"]["gemini"] = {
+        "name": "Google Gemini", "online": has_gemini, "models": GEMINI_MODELS,
     }
 
     return result

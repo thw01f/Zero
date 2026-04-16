@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     # Hugging Face Inference API
     hf_api_token: str = ""
     hf_model: str = "Qwen/Qwen2.5-Coder-32B-Instruct"
+    # Google Gemini API
+    gemini_api_key: str = ""
     # Infrastructure
     redis_url: str = "redis://localhost:6379/0"
     database_url: str = "sqlite:///./darklead.db"

@@ -32,6 +32,7 @@ const paths: Record<string, string> = {
   logout:     'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9',
   menu:       'M4 6h16M4 12h16M4 18h16',
   close:      'M18 6L6 18M6 6l12 12',
+  upload:     'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12',
   chevron_d:  'M6 9l6 6 6-6',
   chevron_r:  'M9 18l6-6-6-6',
   cpu:        'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18',

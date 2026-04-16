@@ -17,6 +17,9 @@ def _get_backend() -> tuple[str, str]:
             return ov["provider"], ov["model"]
     except Exception:
         pass
+    # Gemini key → prefer Gemini
+    if settings.gemini_api_key and len(settings.gemini_api_key) > 10:
+        return "gemini", "gemini-2.5-flash"
     # HF token set → prefer HF
     if settings.hf_api_token and settings.hf_api_token.startswith("hf_"):
         return "huggingface", settings.hf_model
@@ -74,12 +77,33 @@ def _call_huggingface(messages: list, max_tokens: int = 4096, model: str | None 
     return resp.json()["choices"][0]["message"]["content"]
 
 
+def _call_gemini(messages: list, max_tokens: int = 4096, model: str | None = None) -> str:
+    import httpx
+    m = model or "gemini-2.5-flash"
+    url = f"https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    payload = {
+        "model": m,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": 0.1,
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.gemini_api_key}",
+        "Content-Type": "application/json",
+    }
+    resp = httpx.post(url, json=payload, headers=headers, timeout=120.0)
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
+
+
 def _call(messages: list, max_tokens: int = 4096) -> str:
     provider, model = _get_backend()
     if provider == "ollama":
         return _call_ollama(messages, max_tokens, model)
     if provider == "huggingface":
         return _call_huggingface(messages, max_tokens, model)
+    if provider == "gemini":
+        return _call_gemini(messages, max_tokens, model)
     return _call_anthropic(messages, max_tokens, model)
 
 def _extract_json(text: str) -> dict:

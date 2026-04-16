@@ -15,6 +15,7 @@ from .routes import auth as auth_router
 from .routes import profile as profile_router
 from .routes import models as models_router
 from .routes import graph as graph_router
+from .routes import settings as settings_router
 from .routes.auth import hash_password
 
 logging.basicConfig(level=logging.INFO)
@@ -83,6 +84,7 @@ app.include_router(auth_router.router, prefix="/api")
 app.include_router(profile_router.router, prefix="/api")
 app.include_router(models_router.router, prefix="/api")
 app.include_router(graph_router.router, prefix="/api")
+app.include_router(settings_router.router, prefix="/api")
 
 # Serve frontend static files in production
 frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"

@@ -43,21 +43,26 @@ async function select(provider: string, model: string) {
 
 const currentLabel = computed(() => {
   const m = current.value.model ?? ''
-  // Shorten long HF IDs: "Qwen/Qwen2.5-Coder-32B-Instruct" → "Qwen2.5-Coder 32B"
+  if (!m) return 'Select model'
+  // HF: "Qwen/Qwen2.5-Coder-32B-Instruct" → "Qwen2.5-Coder 32B"
   if (m.includes('/')) return m.split('/')[1].replace(/-Instruct$/i, '').replace(/-/g, ' ').slice(0, 22)
-  return m.split(':')[0] || 'Select model'
+  // Gemini: "gemini-2.5-flash" → "Gemini 2.5 Flash"
+  if (m.startsWith('gemini-')) return m.replace('gemini-', 'Gemini ').replace(/-/g, ' ')
+  return m.split(':')[0]
 })
 
 const providerDot = computed(() => {
   const p = current.value.provider
   if (p === 'ollama')       return 'local'
   if (p === 'huggingface')  return 'hf'
+  if (p === 'gemini')       return 'gemini'
   return 'cloud'
 })
 
 const ollamaP    = computed(() => providers.value['ollama'])
 const hfP        = computed(() => providers.value['huggingface'])
 const anthropicP = computed(() => providers.value['anthropic'])
+const geminiP    = computed(() => providers.value['gemini'])
 
 function outside(e: MouseEvent) {
   if (wrap.value && !wrap.value.contains(e.target as Node)) open.value = false
@@ -160,6 +165,31 @@ onBeforeUnmount(() => document.removeEventListener('click', outside))
           </div>
         </div>
 
+        <div class="ms-divider"></div>
+
+        <!-- ── Google Gemini ── -->
+        <div class="ms-section">
+          <div class="ms-section-hdr">
+            <span class="ms-dot gemini"></span>
+            Google Gemini
+            <span class="ms-badge" :class="geminiP?.online ? 'online' : 'no-key'">
+              {{ geminiP?.online ? 'online' : 'no API key' }}
+            </span>
+          </div>
+          <div v-if="!geminiP?.online" class="ms-hint">
+            Set <code>GEMINI_API_KEY=AIza…</code> in <code>backend/.env</code>
+            or apply via Settings · 1M token context · free tier
+          </div>
+          <div v-for="m in geminiP?.models ?? []" :key="m.id"
+            class="ms-option"
+            :class="{selected: current.provider==='gemini' && current.model===m.id,
+                     disabled: !geminiP?.online}"
+            @click="geminiP?.online && select('gemini', m.id)">
+            <div class="ms-opt-name">{{ m.name }}</div>
+            <div class="ms-opt-meta">{{ m.context }} · {{ m.tier }}</div>
+          </div>
+        </div>
+
       </div>
     </transition>
   </div>
@@ -182,9 +212,10 @@ onBeforeUnmount(() => document.removeEventListener('click', outside))
 .ms-dot {
   width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
 }
-.ms-dot.local { background: #34a853; box-shadow: 0 0 0 2px rgba(52,168,83,.25); }
-.ms-dot.cloud { background: #4285f4; box-shadow: 0 0 0 2px rgba(66,133,244,.25); }
-.ms-dot.hf    { background: #ff6f00; box-shadow: 0 0 0 2px rgba(255,111,0,.25); }
+.ms-dot.local   { background: #34a853; box-shadow: 0 0 0 2px rgba(52,168,83,.25); }
+.ms-dot.cloud   { background: #4285f4; box-shadow: 0 0 0 2px rgba(66,133,244,.25); }
+.ms-dot.hf      { background: #ff6f00; box-shadow: 0 0 0 2px rgba(255,111,0,.25); }
+.ms-dot.gemini  { background: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,.25); }
 
 .ms-label { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
 
