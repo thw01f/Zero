@@ -1,0 +1,10 @@
+frontend/node_modules
+frontend/.vite-cache
+backend/__pycache__
+backend/**/__pycache__
+backend/darklead.db
+backend/dump.rdb
+backend/tests
+**/.git
+**/*.pyc
+**/*.pyo

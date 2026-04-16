@@ -280,6 +280,7 @@ const navSections = [
   ]},
   { label: 'Infrastructure', items: [
     { path: '/infra',   icon: 'docker', label: 'Infra Posture' },
+    { path: '/siem',    icon: 'eye',    label: 'SIEM',         badge: 'EVE' },
     { path: '/updates', icon: 'update', label: 'Update Center' },
   ]},
   { label: 'System', items: [

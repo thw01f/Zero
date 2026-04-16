@@ -30,6 +30,7 @@ const router = createRouter({
     { path: '/settings',     component: () => import('../views/Settings.vue') },
     { path: '/compare',      component: () => import('../views/RepoCompare.vue') },
     { path: '/graph',        component: () => import('../views/CodeGraph.vue') },
+    { path: '/siem',         component: () => import('../views/SiemPage.vue') },
     { path: '/profile',      component: () => import('../views/Profile.vue') },
   ],
 })

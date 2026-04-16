@@ -1,25 +1,33 @@
 version: "3.9"
+
+# ──────────────────────────────────────────────
+#  DarkLead — single-container deployment
+#  Supervisord manages: Redis + Uvicorn + Celery
+#  Host networking lets the container reach
+#  Ollama (127.0.0.1:11434) on the host machine.
+# ──────────────────────────────────────────────
 services:
-  app:
+  darklead:
     build:
       context: .
-      dockerfile: backend/Dockerfile
-    ports:
-      - "7860:7860"
+      dockerfile: Dockerfile
+    network_mode: host          # gives container access to host's Ollama
     env_file:
-      - .env
+      - backend/.env
     environment:
-      - DATABASE_URL=sqlite:////data/darklead.db
-      - REDIS_URL=redis://localhost:6379/0
+      DATABASE_URL: "sqlite:////data/darklead.db"
+      REDIS_URL: "redis://localhost:6379/0"
+      OLLAMA_URL: "http://localhost:11434"
     volumes:
       - darklead_data:/data
-      - /tmp/darklead_clones:/tmp
+      - /tmp/darklead_clones:/tmp/darklead_clones
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 60s
 
 volumes:
   darklead_data:
