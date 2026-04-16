@@ -4,6 +4,26 @@ All configuration is via environment variables loaded from `backend/.env`.
 
 ---
 
+## Default Admin Account
+
+A default admin account is seeded automatically on first startup:
+
+| Field | Value |
+|-------|-------|
+| **Username** | `admin` |
+| **Password** | `zero` |
+| **Email** | `admin@darklead.local` |
+| **Role** | `admin` |
+
+To change the password after login: go to **Profile → Security → Change Password**.
+
+To override the JWT signing secret (strongly recommended in production):
+```bash
+JWT_SECRET=your-random-256-bit-secret
+```
+
+---
+
 ## Complete Variable Reference
 
 ### LLM Settings

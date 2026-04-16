@@ -6,22 +6,46 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from .database import engine
-from .models import Base
+from .database import engine, SessionLocal
+from .models import Base, User
 from .config import settings
 from .scheduler import start_scheduler, stop_scheduler
 from .routes import scan, report, monitor, ws, chat, health, analyze
 from .routes import auth as auth_router
 from .routes import profile as profile_router
+from .routes.auth import hash_password
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _seed_admin() -> None:
+    """Create default admin account if it doesn't exist."""
+    import uuid
+    db = SessionLocal()
+    try:
+        if not db.query(User).filter(User.username == "admin").first():
+            db.add(User(
+                id=str(uuid.uuid4()),
+                email="admin@darklead.local",
+                username="admin",
+                full_name="Administrator",
+                hashed_password=hash_password("zero"),
+                avatar_color="#1a73e8",
+                role="admin",
+                is_active=True,
+            ))
+            db.commit()
+            logger.info("Default admin account created (admin / zero)")
+    finally:
+        db.close()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     Base.metadata.create_all(bind=engine)
+    _seed_admin()
     start_scheduler(app)
     logger.info("DarkLead backend started")
     yield

@@ -1,85 +1,131 @@
 # Frontend Guide
 
-The DarkLead frontend is a **Vue 3 + Vite + Tailwind** SPA with a custom **Fortinet FortiAnalyzer-style** dark theme.
+The DarkLead frontend is a **Vue 3 + Vite** SPA with a **Google Cloud Console-themed** design system featuring full dark/light mode toggle.
+
+---
+
+## Authentication
+
+### Default Login
+| Field | Value |
+|-------|-------|
+| Username | `admin` |
+| Password | `zero` |
+
+### Auth Flow
+- `/login` — Google-style centered auth card with username/password
+- `/register` — create new account (full name, username, email, password)
+- All protected routes redirect to `/login` if unauthenticated
+- JWT token stored in `localStorage` as `dl_token` (24-hour expiry)
+- On token expiry, router guard redirects to `/login`
+
+### Profile Management (`/profile`)
+Three tabs:
+- **Account** — edit full name, username, avatar color (8 swatches)
+- **Security** — change password (requires current password confirmation)
+- **Activity** — scan count, issues found, fixes accepted, member since
 
 ---
 
 ## Design System
 
-### Color Palette
+### Theme Toggle
+Click the sun/moon icon in the top navigation bar to switch between light and dark mode. Preference is persisted to `localStorage` as `dl_theme`.
 
-| Token | Hex | Usage |
-|-------|-----|-------|
-| `--ft-bg` | `#0a0e1a` | Page background |
-| `--ft-card` | `#141d30` | Card/panel backgrounds |
-| `--ft-accent` | `#f26d21` | Orange accent — active states, progress bars, CTA buttons |
-| `--ft-border` | `#1e2d45` | Borders, dividers |
-| `--ft-text` | `#d4dde8` | Primary text |
-| `--ft-text-dim` | `#8899aa` | Secondary / muted text |
-| `--ft-green` | `#3ecf8e` | Success, Grade A |
-| `--ft-blue` | `#4a9ff5` | Info, links |
-| `--ft-yellow` | `#f5a623` | Warning, Grade C |
-| `--ft-red` | `#f25555` | Error, Grade F |
+```html
+<!-- Applied to <html> element -->
+<html data-theme="dark">   <!-- or "light" -->
+```
+
+### Color Tokens (CSS Custom Properties)
+
+**Light mode (default):**
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--gc-bg` | `#f8f9fa` | Page background |
+| `--gc-surface` | `#ffffff` | Card/panel backgrounds |
+| `--gc-border` | `#dadce0` | Borders, dividers |
+| `--gc-text` | `#202124` | Primary text |
+| `--gc-text-secondary` | `#5f6368` | Secondary text |
+| `--gc-blue` | `#1a73e8` | Primary accent, links, buttons |
+| `--gc-blue-hover` | `#1557b0` | Hover state |
+| `--gc-nav-bg` | `#ffffff` | Navigation bar background |
+| `--gc-sidebar-bg` | `#f8f9fa` | Sidebar background |
+
+**Dark mode (`[data-theme="dark"]`):**
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--gc-bg` | `#0d1117` | Page background |
+| `--gc-surface` | `#161b22` | Card/panel backgrounds |
+| `--gc-border` | `#30363d` | Borders, dividers |
+| `--gc-text` | `#e6edf3` | Primary text |
+| `--gc-text-secondary` | `#8b949e` | Secondary text |
+| `--gc-nav-bg` | `#161b22` | Navigation bar background |
+| `--gc-sidebar-bg` | `#0d1117` | Sidebar background |
 
 ### Typography
 
-- **Body:** Inter (sans-serif)
-- **Code/monospace:** JetBrains Mono
+- **Body:** Google Sans, Roboto (sans-serif)
+- **Code/monospace:** Roboto Mono
 - **Base size:** 14px
-- **Headers:** 600–700 weight
+- **Headers:** 500–600 weight
 
 ### CSS Classes
 
 ```css
 /* Cards */
-.ft-card        /* Standard card with border */
-.ft-widget      /* Card with 2px orange left border */
-
-/* Tables */
-.ft-table       /* Dark header, hover rows */
-
-/* Severity badges */
-.sev-critical   /* Red background */
-.sev-major      /* Orange background */
-.sev-minor      /* Amber background, dark text */
-.sev-info       /* Blue background */
+.gc-card            /* Surface background, border-radius 8px */
 
 /* Buttons */
-.ft-btn .ft-btn-primary   /* Orange fill */
-.ft-btn .ft-btn-secondary /* Blue fill */
-.ft-btn .ft-btn-ghost     /* No background */
-.ft-btn .ft-btn-danger    /* Red fill */
+.gc-btn             /* Base button */
+.gc-btn-primary     /* Blue fill (Google blue) */
+.gc-btn-secondary   /* Outlined */
+.gc-btn-ghost       /* No background */
+.gc-btn-danger      /* Red fill */
 
 /* Form inputs */
-.ft-input       /* Dark input with orange focus ring */
-.ft-select      /* Dark select */
-.ft-textarea    /* Dark textarea, monospace option */
+.gc-input           /* Outlined input with blue focus ring */
+.gc-select          /* Outlined select */
+
+/* Tables */
+.gc-table           /* Striped, hover rows */
 
 /* Metric tiles */
-.metric-tile    /* Compact stat box */
-.metric-value   /* Large number */
-.metric-label   /* Small gray label */
+.gc-metric-tile     /* Compact stat box */
+
+/* Severity chips */
+.chip-critical      /* Red */
+.chip-major         /* Orange */
+.chip-minor         /* Amber */
+.chip-info          /* Blue */
+
+/* Auth */
+.gc-auth-page       /* Centered full-height auth layout */
+.gc-auth-card       /* Login/register card */
 
 /* Navigation */
-.nav-item       /* Sidebar nav link */
-.nav-item.active /* Orange left border + tinted bg */
-.nav-cnt        /* Count badge on nav item */
+.gc-nav             /* 64px fixed top navigation bar */
+.gc-sidebar         /* 256px collapsible left sidebar */
 ```
 
 ---
 
 ## App Shell (`App.vue`)
 
-### Header (44px)
-- Logo: `DARK` + `LEAD` with orange accent
-- Sidebar toggle button
-- LLM status pill (green dot + "Ollama / qwen2.5-coder")
-- Scan progress bar (3px, orange gradient, shows during active scan)
-- Alert bell with unread badge count
-- Clock (JetBrains Mono, live update)
-- User avatar
+### Top Navigation Bar (64px)
+- Logo: `DarkLead` with blue accent dot
+- Sidebar toggle (hamburger icon)
+- LLM status pill (green dot + model name)
+- Theme toggle (sun/moon icon)
+- Notifications bell with unread badge
+- User avatar (initials, colored per `avatar_color`) with dropdown:
+  - Profile link
+  - Settings link
+  - Logout button
 
-### Sidebar (196px collapsed/expanded)
+### Sidebar (256px, collapsible)
 - **Scan Form** at top — repo URL input + scan button
 - **Navigation groups** with group headers:
 
@@ -239,12 +285,29 @@ Side-by-side comparison:
 
 | Store | File | Purpose |
 |-------|------|---------|
+| `useAuthStore` | `stores/auth.ts` | JWT token, user object, login/logout/register |
 | `useReportStore` | `stores/report.ts` | Current scan report data |
 | `useScanStore` | `stores/scan.ts` | Active scan job, progress |
 | `useAlertsStore` | `stores/alerts.ts` | Alert list (legacy) |
 | `useNotificationsStore` | `stores/notifications.ts` | Typed notifications with levels |
 | `useSettingsStore` | `stores/settings.ts` | LLM backend, UI preferences |
 | `useHistoryStore` | `stores/history.ts` | Scan history with 30s cache |
+
+### Auth Store API
+
+```typescript
+const auth = useAuthStore()
+
+auth.isAuthenticated   // computed boolean
+auth.user              // { id, email, username, full_name, avatar_color, role }
+auth.initials          // computed "JD" from full_name or username[0]
+auth.authHeaders()     // { Authorization: "Bearer <token>" }
+
+await auth.login(username, password)   // stores token + user
+await auth.register(email, username, password, fullName)
+await auth.logout()                    // clears token + user
+await auth.fetchMe()                   // re-hydrate from /api/auth/me
+```
 
 ---
 
