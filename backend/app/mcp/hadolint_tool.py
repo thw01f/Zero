@@ -1,9 +1,8 @@
 import asyncio, json
-from pathlib import Path
 from typing import List
 from .base import BaseTool, Finding
 
-SEV_MAP = {"error": "major", "warning": "minor", "info": "info", "style": "info"}
+SEV = {"error": "major", "warning": "minor", "info": "info", "style": "info"}
 
 
 class HadolintTool(BaseTool):
@@ -13,31 +12,27 @@ class HadolintTool(BaseTool):
     binary = "hadolint"
 
     async def run(self, repo_path: str, language: str) -> List[Finding]:
-        dockerfiles = list(Path(repo_path).rglob("Dockerfile*"))
-        if not dockerfiles:
+        if not self._available():
             return []
-
+        import glob, os
+        dockerfiles = glob.glob(f"{repo_path}/**/Dockerfile*", recursive=True)
+        dockerfiles += glob.glob(f"{repo_path}/**/dockerfile*", recursive=True)
         findings = []
-        for df in dockerfiles:
+        for df in dockerfiles[:5]:
             try:
                 proc = await asyncio.create_subprocess_exec(
-                    "hadolint", "--format", "json", str(df),
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.DEVNULL,
+                    "hadolint", "--format", "json", df,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
                 )
                 stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
-                data = json.loads(stdout)
-                for item in data:
+                for r in json.loads(stdout):
                     findings.append(Finding(
-                        file_path=str(df.relative_to(repo_path)),
-                        line_start=item.get("line", 0),
-                        severity=SEV_MAP.get(item.get("level", "warning"), "minor"),
+                        file_path=df, line_start=r.get("line", 0),
+                        severity=SEV.get(r.get("level", "info"), "info"),
                         category="misconfig",
-                        rule_id=item.get("code", "hadolint"),
-                        message=item.get("message", ""),
-                        tool="hadolint",
-                        resource_type="Dockerfile",
+                        rule_id=r.get("code"), message=r.get("message", ""),
+                        tool="hadolint", resource_type="Dockerfile",
                     ))
             except Exception:
-                continue
+                pass
         return findings
