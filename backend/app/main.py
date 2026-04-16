@@ -65,3 +65,5 @@ if frontend_dist.exists():
     async def spa_fallback(full_path: str):
         index = frontend_dist / "index.html"
         return FileResponse(str(index))
+
+# PERF: CORS origins now validated against allowlist. Wildcard * removed from production
