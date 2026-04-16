@@ -23,19 +23,51 @@ def validate_repo_url(url: str) -> None:
         raise ValueError(f"Host not allowed: {parsed.hostname}. Use GitHub, GitLab, or Bitbucket.")
 
 
+# Extensions that are large binary/data files, never useful for static analysis
+_BINARY_EXTS = {
+    ".h5", ".hdf5", ".pkl", ".pickle", ".pt", ".pth", ".bin", ".weights",
+    ".onnx", ".pb", ".tflite", ".caffemodel", ".npz", ".npy", ".parquet",
+    ".feather", ".arrow", ".db", ".sqlite", ".sqlite3", ".zip", ".tar",
+    ".gz", ".7z", ".rar", ".iso", ".img", ".so", ".dll", ".exe", ".dylib",
+    ".mp4", ".avi", ".mov", ".mkv", ".mp3", ".wav", ".flac",
+    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp",
+}
+
+
 def clone_repo(repo_url: str, dest: str, timeout_s: int = None) -> str:
     validate_repo_url(repo_url)
     timeout_s = timeout_s or settings.clone_timeout_s
-    repo = git.Repo.clone_from(
-        repo_url, dest,
-        depth=1,
-        env={"GIT_TERMINAL_PROMPT": "0"},
-    )
-    # Check size
+
+    # First try: blob filter (skips any single blob > 10MB — catches ML model weights)
+    try:
+        git.Repo.clone_from(
+            repo_url, dest,
+            depth=1,
+            multi_options=["--filter=blob:limit=10m"],
+            env={"GIT_TERMINAL_PROMPT": "0"},
+        )
+    except Exception:
+        if Path(dest).exists():
+            shutil.rmtree(dest, ignore_errors=True)
+        # Fallback: plain shallow clone
+        git.Repo.clone_from(
+            repo_url, dest,
+            depth=1,
+            env={"GIT_TERMINAL_PROMPT": "0"},
+        )
+
+    # Remove known binary/data files that slipped through (e.g. < 10MB models)
+    for fpath in list(Path(dest).rglob("*")):
+        if fpath.is_file() and fpath.suffix.lower() in _BINARY_EXTS:
+            try:
+                fpath.unlink()
+            except Exception:
+                pass
+
     total = sum(f.stat().st_size for f in Path(dest).rglob("*") if f.is_file())
     if total > settings.max_repo_size_mb * 1024 * 1024:
         shutil.rmtree(dest, ignore_errors=True)
-        raise ValueError(f"Repo exceeds {settings.max_repo_size_mb}MB limit")
+        raise ValueError(f"Repo exceeds {settings.max_repo_size_mb}MB limit after filtering")
     return dest
 
 

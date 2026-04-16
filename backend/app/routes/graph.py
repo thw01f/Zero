@@ -34,7 +34,7 @@ def _should_skip(path: str) -> bool:
 
 
 @router.get("/{job_id}")
-def get_graph(job_id: str, db: Session = Depends(get_db), limit: int = 300):
+def get_graph(job_id: str, db: Session = Depends(get_db), limit: int = 600):
     issues  = db.query(Issue).filter(Issue.job_id == job_id).all()
     modules = db.query(Module).filter(Module.job_id == job_id).all()
 
@@ -180,41 +180,52 @@ def get_graph(job_id: str, db: Session = Depends(get_db), limit: int = 300):
 import json as _json
 
 @router.get("/{job_id}/entities")
-def get_entity_graph(job_id: str, db: Session = Depends(get_db), limit: int = 500):
-    """Function/class-level graph from AST analysis."""
+def get_entity_graph(job_id: str, db: Session = Depends(get_db), limit: int = 1200):
+    """Function/class/module-level graph from AST analysis."""
     entities = db.query(CodeEntity).filter(CodeEntity.job_id == job_id).all()
     issues   = db.query(Issue).filter(Issue.job_id == job_id).all()
 
     if not entities:
         raise HTTPException(404, "No entity data — re-scan to generate AST graph")
 
-    # Build issue lookup by file+line
+    # Issue lookup by file
     issue_by_file: dict[str, list] = {}
     for iss in issues:
         issue_by_file.setdefault(iss.file_path, []).append(iss)
 
-    # Build nodes
-    nodes = []
-    name_to_id: dict[str, list[str]] = {}   # qualified_name → list of node IDs
-    for e in entities[:limit]:
-        # Count issues that fall within this entity's line range
+    # Score entities: those with issues first, then by loc
+    def _score(e) -> float:
         file_issues = issue_by_file.get(e.file_path, [])
-        entity_issues = [
-            i for i in file_issues
-            if e.line_start <= (i.line_start or 0) <= e.line_end
-        ]
-        worst_sev = "clean"
+        n_issues = sum(1 for i in file_issues if e.line_start <= (i.line_start or 0) <= e.line_end)
+        return n_issues * 10 + (e.loc or 0)
+
+    sorted_entities = sorted(entities, key=_score, reverse=True)[:limit]
+
+    # Build nodes
+    nodes     = []
+    name_to_id: dict[str, list[str]] = {}
+    mod_qname_to_id: dict[str, str]  = {}   # module qualified_name → node id
+
+    for e in sorted_entities:
+        file_issues    = issue_by_file.get(e.file_path, [])
+        entity_issues  = [i for i in file_issues
+                          if e.line_start <= (i.line_start or 0) <= e.line_end]
+        worst_sev      = "clean"
         for i in entity_issues:
             if _SEV_ORDER.get(i.severity, 0) > _SEV_ORDER.get(worst_sev, 0):
                 worst_sev = i.severity
 
-        node_id = e.id
-        name_to_id.setdefault(e.qualified_name, []).append(node_id)
-        name_to_id.setdefault(e.name, []).append(node_id)
-
         calls_raw = _json.loads(e.calls or "[]")
+        name_to_id.setdefault(e.qualified_name, []).append(e.id)
+        name_to_id.setdefault(e.name, []).append(e.id)
+        if e.entity_type == "module":
+            mod_qname_to_id[e.qualified_name] = e.id
+            # Also index by short name for cross-file matching
+            short = e.qualified_name.split(".")[-1]
+            mod_qname_to_id.setdefault(short, e.id)
+
         nodes.append({
-            "id":             node_id,
+            "id":             e.id,
             "label":          e.name,
             "qualified_name": e.qualified_name,
             "entity_type":    e.entity_type,
@@ -234,34 +245,62 @@ def get_entity_graph(job_id: str, db: Session = Depends(get_db), limit: int = 50
         })
 
     node_ids = {n["id"] for n in nodes}
-    edges = []
-    seen: set = set()
+    edges: list[dict] = []
+    seen:  set         = set()
+
+    def _edge(a: str, b: str, t: str):
+        key = (a, b)
+        if key not in seen and a in node_ids and b in node_ids and a != b:
+            seen.add(key)
+            edges.append({"source": a, "target": b, "type": t})
 
     for n in nodes:
-        # Method → class containment edge
-        if n["parent_name"] and n["entity_type"] == "method":
-            parent_ids = name_to_id.get(n["parent_name"], [])
-            for pid in parent_ids:
-                if pid in node_ids:
-                    key = (pid, n["id"])
-                    if key not in seen:
-                        seen.add(key)
-                        edges.append({"source": pid, "target": n["id"], "type": "contains"})
-        # Call edges
-        for called in n.get("calls", []):
-            targets = name_to_id.get(called, [])
-            for tid in targets:
-                if tid in node_ids and tid != n["id"]:
-                    key = (n["id"], tid)
-                    if key not in seen:
-                        seen.add(key)
-                        edges.append({"source": n["id"], "target": tid, "type": "calls"})
+        etype = n["entity_type"]
+        calls = n.get("calls", [])
 
-    # Strip the `calls` list from nodes (keep small)
+        if etype == "module":
+            # Import edges: module → other module it imports
+            for imp in calls:
+                # Try full dotted path, last segment, and partial matches
+                for key in (imp, imp.split(".")[-1], ".".join(imp.split(".")[-2:])):
+                    tid = mod_qname_to_id.get(key)
+                    if tid:
+                        _edge(n["id"], tid, "imports")
+                        break
+
+        elif etype == "method":
+            # Containment: method → parent class
+            for pid in name_to_id.get(n["parent_name"], []):
+                _edge(pid, n["id"], "contains")
+            # Call edges
+            for called in calls:
+                for tid in name_to_id.get(called, [])[:3]:
+                    _edge(n["id"], tid, "calls")
+
+        elif etype in ("function", "constant"):
+            # Call edges
+            for called in calls:
+                for tid in name_to_id.get(called, [])[:3]:
+                    _edge(n["id"], tid, "calls")
+
+        elif etype == "class":
+            # Inheritance: base class edges
+            for base in calls:
+                for tid in name_to_id.get(base, [])[:2]:
+                    _edge(n["id"], tid, "inherits")
+            # Module containment: link class to its module node
+            mod_path = n["file_path"].replace("/", ".").replace(".py", "").replace(".js", "").replace(".ts", "")
+            for key in (mod_path, mod_path.split(".")[-1]):
+                mid = mod_qname_to_id.get(key)
+                if mid:
+                    _edge(mid, n["id"], "contains")
+                    break
+
+    # Strip calls list before returning
     for n in nodes:
-        del n["calls"]
+        n.pop("calls", None)
 
-    type_counts = {}
+    type_counts: dict[str, int] = {}
     for n in nodes:
         type_counts[n["entity_type"]] = type_counts.get(n["entity_type"], 0) + 1
 
@@ -271,9 +310,11 @@ def get_entity_graph(job_id: str, db: Session = Depends(get_db), limit: int = 50
         "stats": {
             "total_entities": len(nodes),
             "total_edges":    len(edges),
+            "modules":        type_counts.get("module", 0),
             "functions":      type_counts.get("function", 0),
             "methods":        type_counts.get("method", 0),
             "classes":        type_counts.get("class", 0),
+            "constants":      type_counts.get("constant", 0),
             "critical":       sum(1 for n in nodes if n["severity"] == "critical"),
             "major":          sum(1 for n in nodes if n["severity"] == "major"),
         },

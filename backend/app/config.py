@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # Infrastructure
     redis_url: str = "redis://localhost:6379/0"
     database_url: str = "sqlite:///./darklead.db"
-    max_repo_size_mb: int = 200
+    max_repo_size_mb: int = 500
     clone_timeout_s: int = 60
     llm_fix_batch_size: int = 20
     llm_misconfig_batch_size: int = 10

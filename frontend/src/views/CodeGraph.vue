@@ -87,7 +87,7 @@ async function loadEntityGraph() {
   if (!jobId) { error.value = 'No active scan'; return }
   loading.value = true; error.value = ''
   try {
-    const r = await fetch(`/api/graph/${jobId}/entities`)
+    const r = await fetch(`/api/graph/${jobId}/entities?limit=1200`)
     if (!r.ok) throw new Error(r.status === 404 ? 'No entity data — re-scan to generate AST graph' : `HTTP ${r.status}`)
     const d = await r.json()
     entityNodes.value = d.nodes ?? []
@@ -103,19 +103,31 @@ async function loadEntityGraph() {
 }
 
 const ENTITY_COLOR: Record<string, string> = {
-  function: '#3b82f6', method: '#8b5cf6', class: '#f59e0b',
+  module:   '#14b8a6',
+  class:    '#f59e0b',
+  function: '#3b82f6',
+  method:   '#8b5cf6',
+  constant: '#64748b',
 }
 
 function entityNodeColor(n: any): string {
-  const sevC = SEV_COLOR[n.severity]
-  if (sevC && n.severity !== 'clean') return sevC
+  if (n.severity && n.severity !== 'clean') return SEV_COLOR[n.severity] ?? ENTITY_COLOR[n.entity_type] ?? '#9ca3af'
   return ENTITY_COLOR[n.entity_type] ?? '#9ca3af'
 }
 
 function entityRadius(n: any): number {
-  if (n.entity_type === 'class')    return Math.min(10 + Math.sqrt(n.issue_count ?? 0) * 2.5, 28)
-  if (n.entity_type === 'method')   return Math.min(4  + Math.sqrt(n.issue_count ?? 0) * 1.8, 16)
-  return Math.min(6 + Math.sqrt(n.issue_count ?? 0) * 2, 20)
+  const base: Record<string, number> = { module: 14, class: 11, function: 7, method: 5, constant: 4 }
+  const b = base[n.entity_type] ?? 6
+  return Math.min(b + Math.sqrt(n.issue_count ?? 0) * 2.5, 28)
+}
+
+// Hexagon path for module nodes
+function hexPath(r: number): string {
+  const pts = Array.from({ length: 6 }, (_, i) => {
+    const a = (Math.PI / 3) * i - Math.PI / 6
+    return `${r * Math.cos(a)},${r * Math.sin(a)}`
+  })
+  return `M${pts.join('L')}Z`
 }
 
 function renderEntityGraph() {
@@ -131,52 +143,125 @@ function renderEntityGraph() {
   d3.select(el).selectAll('*').remove()
   svgSel = d3.select(el)
 
+  // ── Defs ───────────────────────────────────────────────────────────────────
   const defs = svgSel.append('defs')
   const glow = defs.append('filter').attr('id', 'glow')
-    .attr('x', '-40%').attr('y', '-40%').attr('width', '180%').attr('height', '180%')
+    .attr('x', '-50%').attr('y', '-50%').attr('width', '200%').attr('height', '200%')
   glow.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'blur')
   const fm = glow.append('feMerge')
   fm.append('feMergeNode').attr('in', 'blur')
   fm.append('feMergeNode').attr('in', 'SourceGraphic')
 
-  // Arrow marker for call edges
-  defs.append('marker').attr('id', 'arrow-call').attr('viewBox', '0 -3 6 6')
-    .attr('refX', 6).attr('refY', 0).attr('markerWidth', 5).attr('markerHeight', 5)
-    .attr('orient', 'auto')
-    .append('path').attr('d', 'M0,-3L6,0L0,3').attr('fill', '#6366f1').attr('fill-opacity', .6)
+  const markerDefs = [
+    { id: 'arr-calls',    color: '#6366f1' },
+    { id: 'arr-imports',  color: '#f97316' },
+    { id: 'arr-inherits', color: '#06b6d4' },
+    { id: 'arr-contains', color: '#22c55e' },
+  ]
+  for (const { id, color } of markerDefs) {
+    defs.append('marker').attr('id', id).attr('viewBox', '0 -3 6 6')
+      .attr('refX', 7).attr('refY', 0).attr('markerWidth', 4).attr('markerHeight', 4)
+      .attr('orient', 'auto')
+      .append('path').attr('d', 'M0,-3L6,0L0,3').attr('fill', color).attr('fill-opacity', .7)
+  }
 
   const g = svgSel.append('g').attr('class', 'graph-root')
 
   zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
-    .scaleExtent([0.05, 10])
+    .scaleExtent([0.03, 12])
     .on('zoom', ev => g.attr('transform', ev.transform))
   svgSel.call(zoomBehavior).on('dblclick.zoom', null)
 
+  // ── Filter ────────────────────────────────────────────────────────────────
   const q = searchQ.value.toLowerCase()
   const fn = q
-    ? entityNodes.value.filter(n => n.label.toLowerCase().includes(q) || n.file_path.toLowerCase().includes(q))
+    ? entityNodes.value.filter(n =>
+        n.label.toLowerCase().includes(q) ||
+        (n.file_path || '').toLowerCase().includes(q) ||
+        (n.entity_type || '').toLowerCase().includes(q))
     : entityNodes.value
   const fnIds = new Set(fn.map((n: any) => n.id))
-  const fe = entityEdges.value.filter((e: any) => fnIds.has(e.source) && fnIds.has(e.target))
-
-  const nc = fn.map((n: any) => ({ ...n }))
-  const ec = fe.map((e: any) => ({ ...e }))
+  const fe    = entityEdges.value.filter((e: any) => fnIds.has(e.source) && fnIds.has(e.target))
+  const nc    = fn.map((n: any) => ({ ...n }))
+  const ec    = fe.map((e: any) => ({ ...e }))
 
   if (!nc.length) {
     g.append('text').attr('x', W/2).attr('y', H/2)
       .attr('text-anchor', 'middle').attr('fill', '#6b7280').attr('font-size', 14)
-      .text(q ? 'No entities match search' : 'No entity data')
+      .text(q ? 'No entities match search' : 'No entity data — re-scan to generate')
     return
   }
 
+  // ── File grouping hulls ───────────────────────────────────────────────────
+  const files = [...new Set(nc.map((n: any) => n.file_path).filter(Boolean))] as string[]
+  const fileColor = new Map(files.map((f, i) => [f, DIR_PALETTE[i % DIR_PALETTE.length]]))
+  const hullLayer = g.append('g').attr('class', 'entity-hulls')
+
+  function updateEntityHulls() {
+    hullLayer.selectAll('*').remove()
+    files.forEach(fp => {
+      const pts = nc.filter((n: any) => n.file_path === fp && n.x != null)
+        .map((n: any): [number, number] => [n.x!, n.y!])
+      if (pts.length < 2) return
+      const col = fileColor.get(fp) ?? '#6b7280'
+      const cx = d3.mean(pts, p => p[0])!
+      const cy = d3.mean(pts, p => p[1])!
+
+      if (pts.length === 2) {
+        hullLayer.append('line')
+          .attr('x1', pts[0][0]).attr('y1', pts[0][1])
+          .attr('x2', pts[1][0]).attr('y2', pts[1][1])
+          .attr('stroke', col).attr('stroke-opacity', 0.2).attr('stroke-width', 2)
+        return
+      }
+      const hull = d3.polygonHull(pts)
+      if (!hull || hull.length < 3) return
+      const expanded = hull.map(([x, y]): [number, number] => {
+        const dx = x - cx, dy = y - cy
+        const len = Math.sqrt(dx*dx + dy*dy) || 1
+        return [x + dx/len * 18, y + dy/len * 18]
+      })
+      const line = d3.line<[number,number]>().x(p => p[0]).y(p => p[1])
+        .curve(d3.curveCatmullRomClosed.alpha(0.5))
+      hullLayer.append('path')
+        .attr('d', line(expanded)!)
+        .attr('fill', col).attr('fill-opacity', 0.07)
+        .attr('stroke', col).attr('stroke-opacity', 0.25).attr('stroke-width', 1.5)
+      if (showDirs.value) {
+        const shortLabel = fp.split('/').slice(-1)[0] || fp
+        hullLayer.append('text')
+          .attr('x', cx).attr('y', cy)
+          .attr('text-anchor', 'middle')
+          .attr('fill', col).attr('fill-opacity', 0.55)
+          .attr('font-size', '9px').attr('pointer-events', 'none')
+          .text(shortLabel)
+      }
+    })
+  }
+  hullUpdateFn = updateEntityHulls
+
+  // ── Edge style map ────────────────────────────────────────────────────────
+  const edgeStyle: Record<string, { stroke: string; dash: string | null; marker: string; opacity: number; width: number }> = {
+    calls:    { stroke: '#6366f1', dash: '5,3',  marker: 'url(#arr-calls)',    opacity: 0.45, width: 1 },
+    imports:  { stroke: '#f97316', dash: '6,3',  marker: 'url(#arr-imports)',  opacity: 0.5,  width: 1.5 },
+    inherits: { stroke: '#06b6d4', dash: '3,3',  marker: 'url(#arr-inherits)', opacity: 0.5, width: 1 },
+    contains: { stroke: '#22c55e', dash: null,   marker: 'url(#arr-contains)', opacity: 0.4,  width: 2 },
+  }
+
+  // ── Links ─────────────────────────────────────────────────────────────────
   const linkLayer = g.append('g').attr('class', 'links')
   const link = linkLayer.selectAll('line').data(ec).join('line')
-    .attr('stroke',         (d: any) => d.type === 'calls' ? '#6366f1' : '#22c55e')
-    .attr('stroke-width',   (d: any) => d.type === 'contains' ? 2 : 1)
-    .attr('stroke-opacity', (d: any) => d.type === 'contains' ? 0.5 : 0.4)
-    .attr('stroke-dasharray', (d: any) => d.type === 'calls' ? '4,3' : null)
-    .attr('marker-end', (d: any) => d.type === 'calls' ? 'url(#arrow-call)' : null)
+    .each(function(d: any) {
+      const s = edgeStyle[d.type] ?? edgeStyle.calls
+      d3.select(this)
+        .attr('stroke',           s.stroke)
+        .attr('stroke-width',     s.width)
+        .attr('stroke-opacity',   s.opacity)
+        .attr('stroke-dasharray', s.dash)
+        .attr('marker-end',       s.marker)
+    })
 
+  // ── Nodes ─────────────────────────────────────────────────────────────────
   const nodeLayer = g.append('g').attr('class', 'nodes')
   const node = nodeLayer.selectAll<SVGGElement, any>('g.node-g')
     .data(nc).join('g')
@@ -188,68 +273,133 @@ function renderEntityGraph() {
       .on('end',   (ev, d) => { if (!ev.active) simulation!.alphaTarget(0); d.fx = null; d.fy = null })
     )
 
-  // Class nodes: rounded rect; function: circle; method: diamond
   node.each(function(d: any) {
     const sel = d3.select(this)
-    const r = entityRadius(d)
+    const r   = entityRadius(d)
     const col = entityNodeColor(d)
     const brighter = d3.color(col)?.brighter(0.5)?.toString() ?? '#fff'
-    if (d.entity_type === 'class') {
+    const stroke = d.issue_count > 0 ? SEV_COLOR[d.severity] ?? brighter : brighter
+
+    if (d.entity_type === 'module') {
+      sel.append('path')
+        .attr('d', hexPath(r))
+        .attr('fill', col).attr('fill-opacity', 0.9)
+        .attr('stroke', stroke).attr('stroke-width', 2)
+    } else if (d.entity_type === 'class') {
       sel.append('rect')
-        .attr('x', -r).attr('y', -r * 0.65)
-        .attr('width', r * 2).attr('height', r * 1.3)
+        .attr('x', -r).attr('y', -r * 0.7)
+        .attr('width', r * 2).attr('height', r * 1.4)
         .attr('rx', 3)
-        .attr('fill', col).attr('fill-opacity', 0.85)
-        .attr('stroke', brighter).attr('stroke-width', 1.5)
+        .attr('fill', col).attr('fill-opacity', 0.88)
+        .attr('stroke', stroke).attr('stroke-width', 1.5)
     } else if (d.entity_type === 'method') {
-      const s = r * 0.9
+      const s = r
       sel.append('polygon')
         .attr('points', `0,${-s} ${s},0 0,${s} ${-s},0`)
         .attr('fill', col).attr('fill-opacity', 0.85)
-        .attr('stroke', brighter).attr('stroke-width', 1.5)
+        .attr('stroke', stroke).attr('stroke-width', 1.5)
+    } else if (d.entity_type === 'constant') {
+      const s = r * 0.8
+      sel.append('rect')
+        .attr('x', -s).attr('y', -s)
+        .attr('width', s * 2).attr('height', s * 2)
+        .attr('rx', 0)
+        .attr('fill', col).attr('fill-opacity', 0.7)
+        .attr('stroke', stroke).attr('stroke-width', 1)
     } else {
       sel.append('circle')
         .attr('r', r)
         .attr('fill', col).attr('fill-opacity', 0.85)
-        .attr('stroke', brighter).attr('stroke-width', 1.5)
+        .attr('stroke', stroke).attr('stroke-width', 1.5)
+    }
+
+    // Issue pulse ring
+    if (d.severity === 'critical' || d.severity === 'major') {
+      sel.append('circle')
+        .attr('r', r + 4)
+        .attr('fill', 'none')
+        .attr('stroke', SEV_COLOR[d.severity])
+        .attr('stroke-width', 1)
+        .attr('stroke-opacity', 0.4)
+        .attr('stroke-dasharray', '2,2')
     }
   })
 
+  // Labels — always shown for module/class, shown for function if r > 6
   node.append('text')
-    .attr('dy', (d: any) => entityRadius(d) + 10)
+    .attr('dy', (d: any) => {
+      if (d.entity_type === 'module') return entityRadius(d) + 12
+      if (d.entity_type === 'class')  return entityRadius(d) + 11
+      return entityRadius(d) + 10
+    })
     .attr('text-anchor', 'middle')
-    .attr('fill', '#8a96b0').attr('font-size', '9px')
+    .attr('fill', (d: any) => d.entity_type === 'module' ? '#14b8a6' : d.entity_type === 'class' ? '#f59e0b' : '#8a96b0')
+    .attr('font-size', (d: any) => d.entity_type === 'module' ? '10px' : '8px')
+    .attr('font-weight', (d: any) => ['module', 'class'].includes(d.entity_type) ? '600' : '400')
     .attr('pointer-events', 'none')
-    .text((d: any) => d.label)
-    .style('display', (d: any) => entityRadius(d) > 8 ? 'block' : 'none')
+    .text((d: any) => d.label.length > 18 ? d.label.slice(0, 16) + '…' : d.label)
+    .style('display', (d: any) => {
+      if (['module', 'class'].includes(d.entity_type)) return 'block'
+      return entityRadius(d) > 6 ? 'block' : 'none'
+    })
 
   node
     .on('click', (_ev, d) => { selected.value = d })
-    .on('mouseenter', (ev) => {
-      d3.select(ev.currentTarget).select('circle,rect,polygon')
-        .attr('stroke', '#fff').attr('stroke-width', 2.5).attr('filter', 'url(#glow)')
+    .on('mouseenter', (ev, d) => {
+      d3.select(ev.currentTarget).select('circle,rect,polygon,path')
+        .attr('stroke', '#fff').attr('stroke-width', 3).attr('filter', 'url(#glow)')
     })
     .on('mouseleave', (ev, d) => {
       const col = d3.color(entityNodeColor(d))?.brighter(0.5)?.toString() ?? '#fff'
-      d3.select(ev.currentTarget).select('circle,rect,polygon')
-        .attr('stroke', col).attr('stroke-width', 1.5).attr('filter', null)
+      d3.select(ev.currentTarget).select('circle,rect,polygon,path')
+        .attr('stroke', col).attr('stroke-width', d.entity_type === 'module' ? 2 : 1.5)
+        .attr('filter', null)
     })
 
-  simulation = d3.forceSimulation(nc)
-    .force('link',    d3.forceLink(ec).id((d: any) => d.id).distance(60).strength(0.5))
-    .force('charge',  d3.forceManyBody().strength(-180).distanceMax(300))
-    .force('center',  d3.forceCenter(W / 2, H / 2))
-    .force('collide', d3.forceCollide().radius((d: any) => entityRadius(d) + 6).iterations(2))
-    .velocityDecay(0.45).alphaDecay(0.025)
+  // ── Simulation ────────────────────────────────────────────────────────────
+  // Cluster nodes by file using x/y forces
+  const fileIndex = new Map(files.map((f, i) => [f, i]))
+  const cols = Math.ceil(Math.sqrt(files.length + 1))
+  const cellW = W / (cols + 1)
+  const cellH = H / (Math.ceil(files.length / cols) + 1)
 
+  simulation = d3.forceSimulation(nc)
+    .force('link',    d3.forceLink(ec).id((d: any) => d.id)
+      .distance((d: any) => {
+        if (d.type === 'contains') return 35
+        if (d.type === 'calls')    return 55
+        if (d.type === 'imports')  return 90
+        return 65
+      })
+      .strength((d: any) => d.type === 'contains' ? 0.9 : d.type === 'imports' ? 0.3 : 0.4))
+    .force('charge',  d3.forceManyBody()
+      .strength((d: any) => d.entity_type === 'module' ? -400 : d.entity_type === 'class' ? -200 : -80)
+      .distanceMax(400))
+    .force('center',  d3.forceCenter(W / 2, H / 2))
+    .force('collide', d3.forceCollide().radius((d: any) => entityRadius(d) + 8).iterations(3))
+    .force('cluster_x', d3.forceX((d: any) => {
+      const fi = fileIndex.get(d.file_path) ?? 0
+      return cellW * ((fi % cols) + 1)
+    }).strength(0.12))
+    .force('cluster_y', d3.forceY((d: any) => {
+      const fi = fileIndex.get(d.file_path) ?? 0
+      return cellH * (Math.floor(fi / cols) + 1)
+    }).strength(0.12))
+    .velocityDecay(0.4)
+    .alphaDecay(0.02)
+
+  let ticks = 0
   simulation.on('tick', () => {
+    ticks++
     link
       .attr('x1', (d: any) => d.source.x).attr('y1', (d: any) => d.source.y)
       .attr('x2', (d: any) => d.target.x).attr('y2', (d: any) => d.target.y)
     node.attr('transform', (d: any) => `translate(${d.x ?? 0},${d.y ?? 0})`)
+    if (ticks % 4 === 0) updateEntityHulls()
   })
+  simulation.on('end', () => updateEntityHulls())
 
-  setTimeout(() => fitGraph(), 1800)
+  setTimeout(() => fitGraph(), 2200)
 }
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
