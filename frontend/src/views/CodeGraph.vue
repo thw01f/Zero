@@ -15,12 +15,18 @@ const colorMode  = ref<'severity' | 'language' | 'debt'>('severity')
 const searchQ    = ref('')
 const selected   = ref<any>(null)
 const showDirs   = ref(false)
+const viewMode   = ref<'file' | 'entity'>('file')
 
 const nodes = ref<any[]>([])
 const edges = ref<any[]>([])
 const stats = ref<any>({})
 const truncated = ref(false)
 const totalRaw  = ref(0)
+
+// Entity view
+const entityNodes = ref<any[]>([])
+const entityEdges = ref<any[]>([])
+const entityStats = ref<any>({})
 
 let simulation: d3.Simulation<any, any> | null = null
 let svgSel: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null
@@ -54,6 +60,7 @@ function nodeRadius(n: any): number {
 
 // ── Data loading ──────────────────────────────────────────────────────────────
 async function loadGraph() {
+  if (viewMode.value === 'entity') { await loadEntityGraph(); return }
   const jobId = report.data?.job_id || scan.jobId
   if (!jobId) { error.value = 'No active scan — run a scan first'; return }
   loading.value = true; error.value = ''
@@ -73,6 +80,176 @@ async function loadGraph() {
   } finally {
     loading.value = false
   }
+}
+
+async function loadEntityGraph() {
+  const jobId = report.data?.job_id || scan.jobId
+  if (!jobId) { error.value = 'No active scan'; return }
+  loading.value = true; error.value = ''
+  try {
+    const r = await fetch(`/api/graph/${jobId}/entities`)
+    if (!r.ok) throw new Error(r.status === 404 ? 'No entity data — re-scan to generate AST graph' : `HTTP ${r.status}`)
+    const d = await r.json()
+    entityNodes.value = d.nodes ?? []
+    entityEdges.value = d.edges ?? []
+    entityStats.value = d.stats ?? {}
+    await nextTick()
+    renderEntityGraph()
+  } catch (e: any) {
+    error.value = e.message ?? 'Failed to load entity graph'
+  } finally {
+    loading.value = false
+  }
+}
+
+const ENTITY_COLOR: Record<string, string> = {
+  function: '#3b82f6', method: '#8b5cf6', class: '#f59e0b',
+}
+
+function entityNodeColor(n: any): string {
+  const sevC = SEV_COLOR[n.severity]
+  if (sevC && n.severity !== 'clean') return sevC
+  return ENTITY_COLOR[n.entity_type] ?? '#9ca3af'
+}
+
+function entityRadius(n: any): number {
+  if (n.entity_type === 'class')    return Math.min(10 + Math.sqrt(n.issue_count ?? 0) * 2.5, 28)
+  if (n.entity_type === 'method')   return Math.min(4  + Math.sqrt(n.issue_count ?? 0) * 1.8, 16)
+  return Math.min(6 + Math.sqrt(n.issue_count ?? 0) * 2, 20)
+}
+
+function renderEntityGraph() {
+  if (!svgEl.value) return
+  simulation?.stop()
+  hullUpdateFn = null
+  selected.value = null
+
+  const el = svgEl.value
+  const W  = el.clientWidth  || 960
+  const H  = el.clientHeight || 640
+
+  d3.select(el).selectAll('*').remove()
+  svgSel = d3.select(el)
+
+  const defs = svgSel.append('defs')
+  const glow = defs.append('filter').attr('id', 'glow')
+    .attr('x', '-40%').attr('y', '-40%').attr('width', '180%').attr('height', '180%')
+  glow.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'blur')
+  const fm = glow.append('feMerge')
+  fm.append('feMergeNode').attr('in', 'blur')
+  fm.append('feMergeNode').attr('in', 'SourceGraphic')
+
+  // Arrow marker for call edges
+  defs.append('marker').attr('id', 'arrow-call').attr('viewBox', '0 -3 6 6')
+    .attr('refX', 6).attr('refY', 0).attr('markerWidth', 5).attr('markerHeight', 5)
+    .attr('orient', 'auto')
+    .append('path').attr('d', 'M0,-3L6,0L0,3').attr('fill', '#6366f1').attr('fill-opacity', .6)
+
+  const g = svgSel.append('g').attr('class', 'graph-root')
+
+  zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
+    .scaleExtent([0.05, 10])
+    .on('zoom', ev => g.attr('transform', ev.transform))
+  svgSel.call(zoomBehavior).on('dblclick.zoom', null)
+
+  const q = searchQ.value.toLowerCase()
+  const fn = q
+    ? entityNodes.value.filter(n => n.label.toLowerCase().includes(q) || n.file_path.toLowerCase().includes(q))
+    : entityNodes.value
+  const fnIds = new Set(fn.map((n: any) => n.id))
+  const fe = entityEdges.value.filter((e: any) => fnIds.has(e.source) && fnIds.has(e.target))
+
+  const nc = fn.map((n: any) => ({ ...n }))
+  const ec = fe.map((e: any) => ({ ...e }))
+
+  if (!nc.length) {
+    g.append('text').attr('x', W/2).attr('y', H/2)
+      .attr('text-anchor', 'middle').attr('fill', '#6b7280').attr('font-size', 14)
+      .text(q ? 'No entities match search' : 'No entity data')
+    return
+  }
+
+  const linkLayer = g.append('g').attr('class', 'links')
+  const link = linkLayer.selectAll('line').data(ec).join('line')
+    .attr('stroke',         (d: any) => d.type === 'calls' ? '#6366f1' : '#22c55e')
+    .attr('stroke-width',   (d: any) => d.type === 'contains' ? 2 : 1)
+    .attr('stroke-opacity', (d: any) => d.type === 'contains' ? 0.5 : 0.4)
+    .attr('stroke-dasharray', (d: any) => d.type === 'calls' ? '4,3' : null)
+    .attr('marker-end', (d: any) => d.type === 'calls' ? 'url(#arrow-call)' : null)
+
+  const nodeLayer = g.append('g').attr('class', 'nodes')
+  const node = nodeLayer.selectAll<SVGGElement, any>('g.node-g')
+    .data(nc).join('g')
+    .attr('class', 'node-g')
+    .style('cursor', 'pointer')
+    .call(d3.drag<SVGGElement, any>()
+      .on('start', (ev, d) => { if (!ev.active) simulation!.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y })
+      .on('drag',  (ev, d) => { d.fx = ev.x; d.fy = ev.y })
+      .on('end',   (ev, d) => { if (!ev.active) simulation!.alphaTarget(0); d.fx = null; d.fy = null })
+    )
+
+  // Class nodes: rounded rect; function: circle; method: diamond
+  node.each(function(d: any) {
+    const sel = d3.select(this)
+    const r = entityRadius(d)
+    const col = entityNodeColor(d)
+    const brighter = d3.color(col)?.brighter(0.5)?.toString() ?? '#fff'
+    if (d.entity_type === 'class') {
+      sel.append('rect')
+        .attr('x', -r).attr('y', -r * 0.65)
+        .attr('width', r * 2).attr('height', r * 1.3)
+        .attr('rx', 3)
+        .attr('fill', col).attr('fill-opacity', 0.85)
+        .attr('stroke', brighter).attr('stroke-width', 1.5)
+    } else if (d.entity_type === 'method') {
+      const s = r * 0.9
+      sel.append('polygon')
+        .attr('points', `0,${-s} ${s},0 0,${s} ${-s},0`)
+        .attr('fill', col).attr('fill-opacity', 0.85)
+        .attr('stroke', brighter).attr('stroke-width', 1.5)
+    } else {
+      sel.append('circle')
+        .attr('r', r)
+        .attr('fill', col).attr('fill-opacity', 0.85)
+        .attr('stroke', brighter).attr('stroke-width', 1.5)
+    }
+  })
+
+  node.append('text')
+    .attr('dy', (d: any) => entityRadius(d) + 10)
+    .attr('text-anchor', 'middle')
+    .attr('fill', '#8a96b0').attr('font-size', '9px')
+    .attr('pointer-events', 'none')
+    .text((d: any) => d.label)
+    .style('display', (d: any) => entityRadius(d) > 8 ? 'block' : 'none')
+
+  node
+    .on('click', (_ev, d) => { selected.value = d })
+    .on('mouseenter', (ev) => {
+      d3.select(ev.currentTarget).select('circle,rect,polygon')
+        .attr('stroke', '#fff').attr('stroke-width', 2.5).attr('filter', 'url(#glow)')
+    })
+    .on('mouseleave', (ev, d) => {
+      const col = d3.color(entityNodeColor(d))?.brighter(0.5)?.toString() ?? '#fff'
+      d3.select(ev.currentTarget).select('circle,rect,polygon')
+        .attr('stroke', col).attr('stroke-width', 1.5).attr('filter', null)
+    })
+
+  simulation = d3.forceSimulation(nc)
+    .force('link',    d3.forceLink(ec).id((d: any) => d.id).distance(60).strength(0.5))
+    .force('charge',  d3.forceManyBody().strength(-180).distanceMax(300))
+    .force('center',  d3.forceCenter(W / 2, H / 2))
+    .force('collide', d3.forceCollide().radius((d: any) => entityRadius(d) + 6).iterations(2))
+    .velocityDecay(0.45).alphaDecay(0.025)
+
+  simulation.on('tick', () => {
+    link
+      .attr('x1', (d: any) => d.source.x).attr('y1', (d: any) => d.source.y)
+      .attr('x2', (d: any) => d.target.x).attr('y2', (d: any) => d.target.y)
+    node.attr('transform', (d: any) => `translate(${d.x ?? 0},${d.y ?? 0})`)
+  })
+
+  setTimeout(() => fitGraph(), 1800)
 }
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
@@ -307,9 +484,10 @@ const legendItems = computed(() => {
   ]
 })
 
-watch(colorMode,  () => renderGraph())
-watch(searchQ,    () => { simulation?.stop(); renderGraph() })
+watch(colorMode,  () => { if (viewMode.value === 'file') renderGraph() })
+watch(searchQ,    () => { simulation?.stop(); viewMode.value === 'entity' ? renderEntityGraph() : renderGraph() })
 watch(showDirs,   () => { if (hullUpdateFn) hullUpdateFn(); else renderGraph() })
+watch(viewMode,   () => loadGraph())
 
 onMounted(() => {
   loadGraph()
@@ -328,31 +506,44 @@ onBeforeUnmount(() => {
       <div class="cg-title">
         <AppIcon name="graph" :size="18" style="color:var(--gc-primary)" />
         <span>Code Graph</span>
-        <span class="cg-badge">{{ stats.total_files ?? 0 }} files · {{ stats.total_edges ?? 0 }} edges</span>
+        <span class="cg-badge" v-if="viewMode === 'file'">{{ stats.total_files ?? 0 }} files · {{ stats.total_edges ?? 0 }} edges</span>
+        <span class="cg-badge" v-if="viewMode === 'entity'">{{ entityStats.total_entities ?? 0 }} entities · {{ entityStats.total_edges ?? 0 }} edges</span>
         <span v-if="truncated" class="cg-badge" style="background:#451407;color:#fdba74;">
           top {{ stats.total_files }} / {{ totalRaw }} shown
         </span>
       </div>
 
       <div class="cg-controls">
+        <!-- View mode toggle -->
+        <div class="cg-view-toggle">
+          <button class="cg-vt-btn" :class="{ active: viewMode === 'file' }" @click="viewMode = 'file'">
+            Files
+          </button>
+          <button class="cg-vt-btn" :class="{ active: viewMode === 'entity' }" @click="viewMode = 'entity'">
+            Entities
+          </button>
+        </div>
+
         <div class="cg-search-wrap">
           <AppIcon name="search" :size="13" class="cg-search-icon" />
-          <input v-model="searchQ" class="cg-search" placeholder="Filter files…" />
+          <input v-model="searchQ" class="cg-search" :placeholder="viewMode === 'entity' ? 'Filter entities…' : 'Filter files…'" />
         </div>
 
-        <label class="cg-toggle">
-          <input type="checkbox" v-model="showDirs" />
-          <span>Dir labels</span>
-        </label>
+        <template v-if="viewMode === 'file'">
+          <label class="cg-toggle">
+            <input type="checkbox" v-model="showDirs" />
+            <span>Dir labels</span>
+          </label>
 
-        <div class="cg-control-item">
-          <label class="cg-label">Color</label>
-          <select v-model="colorMode" class="gc-select gc-select-sm" style="width:115px;">
-            <option value="severity">Severity</option>
-            <option value="language">Language</option>
-            <option value="debt">Debt Score</option>
-          </select>
-        </div>
+          <div class="cg-control-item">
+            <label class="cg-label">Color</label>
+            <select v-model="colorMode" class="gc-select gc-select-sm" style="width:115px;">
+              <option value="severity">Severity</option>
+              <option value="language">Language</option>
+              <option value="debt">Debt Score</option>
+            </select>
+          </div>
+        </template>
 
         <button class="gc-btn gc-btn-ghost gc-btn-sm" @click="resetZoom">Fit</button>
         <button class="gc-btn gc-btn-primary gc-btn-sm" @click="loadGraph" :disabled="loading">
@@ -361,8 +552,8 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Stats ribbon -->
-    <div class="cg-stats" v-if="stats.total_files">
+    <!-- Stats ribbon — file view -->
+    <div class="cg-stats" v-if="viewMode === 'file' && stats.total_files">
       <div class="cg-stat sev-crit">
         <span class="cg-stat-val">{{ stats.critical_files }}</span>
         <span class="cg-stat-lbl">critical</span>
@@ -382,12 +573,46 @@ onBeforeUnmount(() => {
         <span class="cg-stat-val">{{ stats.total_dirs }}</span>
         <span class="cg-stat-lbl">dirs</span>
       </div>
-
       <div class="cg-legend">
         <span v-for="item in legendItems.slice(0, 8)" :key="item.label" class="cg-leg-item">
           <span class="cg-leg-dot" :style="{ background: item.color }"></span>
           {{ item.label }}
         </span>
+      </div>
+    </div>
+
+    <!-- Stats ribbon — entity view -->
+    <div class="cg-stats" v-if="viewMode === 'entity' && entityStats.total_entities">
+      <div class="cg-stat" style="color:#f59e0b">
+        <span class="cg-stat-val">{{ entityStats.classes }}</span>
+        <span class="cg-stat-lbl">classes</span>
+      </div>
+      <div class="cg-stat-sep">·</div>
+      <div class="cg-stat" style="color:#3b82f6">
+        <span class="cg-stat-val">{{ entityStats.functions }}</span>
+        <span class="cg-stat-lbl">functions</span>
+      </div>
+      <div class="cg-stat-sep">·</div>
+      <div class="cg-stat" style="color:#8b5cf6">
+        <span class="cg-stat-val">{{ entityStats.methods }}</span>
+        <span class="cg-stat-lbl">methods</span>
+      </div>
+      <div class="cg-stat-sep">·</div>
+      <div class="cg-stat sev-crit">
+        <span class="cg-stat-val">{{ entityStats.critical }}</span>
+        <span class="cg-stat-lbl">critical entities</span>
+      </div>
+      <div class="cg-stat-sep">·</div>
+      <div class="cg-stat">
+        <span class="cg-stat-val">{{ entityStats.total_edges }}</span>
+        <span class="cg-stat-lbl">edges</span>
+      </div>
+      <div class="cg-legend">
+        <span class="cg-leg-item"><span class="cg-leg-dot" style="background:#f59e0b;border-radius:2px"></span>class</span>
+        <span class="cg-leg-item"><span class="cg-leg-dot" style="background:#3b82f6"></span>function</span>
+        <span class="cg-leg-item"><span class="cg-leg-dot" style="background:#8b5cf6;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)"></span>method</span>
+        <span class="cg-leg-item"><span style="display:inline-block;width:16px;height:2px;background:#6366f1;border-top:1px dashed #6366f1;vertical-align:middle"></span>calls</span>
+        <span class="cg-leg-item"><span style="display:inline-block;width:16px;height:2px;background:#22c55e;vertical-align:middle"></span>contains</span>
       </div>
     </div>
 
@@ -414,7 +639,8 @@ onBeforeUnmount(() => {
           </div>
           <div class="cg-panel-path">{{ selected.id }}</div>
 
-          <div class="cg-panel-metrics">
+          <!-- File node metrics -->
+          <div v-if="viewMode === 'file'" class="cg-panel-metrics">
             <div class="cg-metric">
               <div class="cg-metric-val" :class="`chip chip-${selected.severity}`">{{ selected.severity }}</div>
               <div class="cg-metric-lbl">Severity</div>
@@ -438,6 +664,49 @@ onBeforeUnmount(() => {
             <div class="cg-metric">
               <div class="cg-metric-val cg-lang-badge">{{ selected.language }}</div>
               <div class="cg-metric-lbl">Language</div>
+            </div>
+          </div>
+
+          <!-- Entity node metrics -->
+          <div v-if="viewMode === 'entity'" class="cg-panel-metrics">
+            <div class="cg-metric">
+              <div class="cg-metric-val" :class="`chip chip-${selected.severity}`">{{ selected.severity }}</div>
+              <div class="cg-metric-lbl">Severity</div>
+            </div>
+            <div class="cg-metric">
+              <div class="cg-metric-val" style="text-transform:capitalize">{{ selected.entity_type }}</div>
+              <div class="cg-metric-lbl">Type</div>
+            </div>
+            <div class="cg-metric">
+              <div class="cg-metric-val">{{ selected.issue_count }}</div>
+              <div class="cg-metric-lbl">Issues</div>
+            </div>
+            <div class="cg-metric">
+              <div class="cg-metric-val">{{ selected.loc ?? 0 }}</div>
+              <div class="cg-metric-lbl">LOC</div>
+            </div>
+            <div class="cg-metric" v-if="selected.line_start">
+              <div class="cg-metric-val">{{ selected.line_start }}–{{ selected.line_end }}</div>
+              <div class="cg-metric-lbl">Lines</div>
+            </div>
+            <div class="cg-metric" v-if="selected.parent_name">
+              <div class="cg-metric-val cg-lang-badge" style="font-size:10px">{{ selected.parent_name }}</div>
+              <div class="cg-metric-lbl">Parent</div>
+            </div>
+          </div>
+
+          <!-- Entity file path & issues -->
+          <div v-if="viewMode === 'entity' && selected.file_path" class="cg-panel-path" style="margin-top:6px">
+            {{ selected.file_path }}
+          </div>
+          <div v-if="viewMode === 'entity' && selected.issues?.length" class="cg-issues-list">
+            <div class="cg-issues-ttl">Issues in this entity</div>
+            <div v-for="(iss, i) in selected.issues" :key="i" class="cg-iss-row">
+              <span :class="`chip chip-${iss.severity}`" style="font-size:10px;padding:1px 5px;flex-shrink:0;">{{ iss.severity }}</span>
+              <div class="cg-iss-body">
+                <div class="cg-iss-msg">{{ iss.message }}</div>
+                <div class="cg-iss-meta">line {{ iss.line }} · {{ iss.rule_id }}</div>
+              </div>
             </div>
           </div>
 
@@ -491,6 +760,15 @@ onBeforeUnmount(() => {
   background: var(--gc-primary-light); color: var(--gc-primary); font-weight: 500;
 }
 .cg-controls { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.cg-view-toggle {
+  display: flex; border: 1px solid var(--gc-border); border-radius: 6px; overflow: hidden;
+}
+.cg-vt-btn {
+  padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer;
+  background: transparent; border: none; color: var(--gc-text-3); transition: all 0.15s;
+}
+.cg-vt-btn.active { background: var(--gc-primary-light); color: var(--gc-primary); }
+.cg-vt-btn:not(.active):hover { color: var(--gc-text); background: var(--gc-surface-2); }
 .cg-search-wrap { position: relative; }
 .cg-search-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--gc-text-3); }
 .cg-search {

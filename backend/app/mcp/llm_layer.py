@@ -276,6 +276,39 @@ async def analyze_code_snippet(code: str, language: str, filename: str, mode: st
     return result
 
 
+async def explain_finding(finding: dict, code_context: Optional[str], language: str) -> dict:
+    rule    = finding.get('rule_id') or finding.get('rule', 'unknown')
+    sev     = finding.get('severity', 'info')
+    msg     = finding.get('message', '')
+    fp      = finding.get('file_path', 'unknown')
+    line    = finding.get('line_start') or finding.get('line', 0)
+    cwe     = finding.get('cwe_id') or finding.get('cwe', '')
+    owasp   = finding.get('owasp_category') or finding.get('owasp', '')
+    ctx_sec = (f"\n\nCode context (around line {line}):\n```{language}\n{code_context}\n```"
+               if code_context else "")
+    prompt = (
+        f"You are a security expert. Explain this {sev}-severity finding.\n\n"
+        f"File: {fp} line {line}\nRule: {rule}\nMessage: {msg}\n"
+        + (f"CWE: {cwe}\n" if cwe else "")
+        + (f"OWASP: {owasp}\n" if owasp else "")
+        + ctx_sec
+        + "\n\nReturn ONLY valid JSON (no markdown) with keys: "
+        '{"why": "2-3 sentences on root cause and attack vector", '
+        '"risk": "what an attacker can do", '
+        '"fix": "specific remediation code or strategy", '
+        '"example_attack": "brief realistic attack example", '
+        '"references": ["CWE/OWASP links if applicable"]}'
+    )
+    messages_ = [{"role": "user", "content": prompt}]
+    loop = asyncio.get_event_loop()
+    raw = await loop.run_in_executor(None, lambda: _call(messages_, 1024))
+    result = _extract_json(raw)
+    if not result:
+        result = {"why": msg, "risk": f"Security risk at severity {sev}.",
+                  "fix": "Review and remediate.", "example_attack": "", "references": []}
+    return result
+
+
 async def chat_stream(message: str, job_id: str, history: list, context: list, _: str) -> str:
     sys_prompt = (
         "You are DarkLead's AI assistant. Answer questions about the scan results concisely. "

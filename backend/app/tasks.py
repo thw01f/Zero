@@ -10,7 +10,7 @@ from pathlib import Path
 from .celery_app import celery_app
 from .config import settings
 from .database import SessionLocal
-from .models import Job, Issue, Module, Misconfig, DepUpdate, Advisory, StatusEnum
+from .models import Job, Issue, Module, Misconfig, DepUpdate, Advisory, StatusEnum, CodeEntity
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +135,16 @@ async def _scan_pipeline(job_id: str, repo_url: str, language: str, standards_do
             db.add(Module(**{**m, "job_id": job_id}))
 
         persist_compliance(job_id, compliance, db)
+
+        # AST entity extraction (best-effort, non-blocking)
+        try:
+            from .ast_analyzer import extract_entities
+            entities = extract_entities(repo_path, max_files=200)
+            for e in entities:
+                db.add(CodeEntity(**{**e, "job_id": job_id}))
+            logger.info(f"AST: extracted {len(entities)} entities for {job_id[:8]}")
+        except Exception as _ae:
+            logger.debug(f"AST extraction skipped: {_ae}")
 
         scan_time_ms  = int((time.time() - start_time) * 1000)
         overall_debt  = weighted_avg_debt(modules_data)

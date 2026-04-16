@@ -176,6 +176,22 @@ class ChatMessage(Base):
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+class CodeEntity(Base):
+    __tablename__ = "code_entities"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    job_id = Column(String, nullable=False, index=True)
+    file_path = Column(String, nullable=False)
+    entity_type = Column(String)          # function | method | class
+    name = Column(String)
+    qualified_name = Column(String)
+    line_start = Column(Integer, default=0)
+    line_end = Column(Integer, default=0)
+    parent_name = Column(String, nullable=True)
+    calls = Column(Text, nullable=True)   # JSON list of called names
+    loc = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
 class User(Base):
     __tablename__ = "users"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))

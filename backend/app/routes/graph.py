@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import Issue, Module
+from ..models import Issue, Module, CodeEntity
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
@@ -174,5 +174,107 @@ def get_graph(job_id: str, db: Session = Depends(get_db), limit: int = 300):
             "critical_files": sum(1 for n in nodes if n["severity"] == "critical"),
             "major_files":    sum(1 for n in nodes if n["severity"] == "major"),
             "clean_files":    sum(1 for n in nodes if n["severity"] == "clean"),
+        },
+    }
+
+import json as _json
+
+@router.get("/{job_id}/entities")
+def get_entity_graph(job_id: str, db: Session = Depends(get_db), limit: int = 500):
+    """Function/class-level graph from AST analysis."""
+    entities = db.query(CodeEntity).filter(CodeEntity.job_id == job_id).all()
+    issues   = db.query(Issue).filter(Issue.job_id == job_id).all()
+
+    if not entities:
+        raise HTTPException(404, "No entity data — re-scan to generate AST graph")
+
+    # Build issue lookup by file+line
+    issue_by_file: dict[str, list] = {}
+    for iss in issues:
+        issue_by_file.setdefault(iss.file_path, []).append(iss)
+
+    # Build nodes
+    nodes = []
+    name_to_id: dict[str, list[str]] = {}   # qualified_name → list of node IDs
+    for e in entities[:limit]:
+        # Count issues that fall within this entity's line range
+        file_issues = issue_by_file.get(e.file_path, [])
+        entity_issues = [
+            i for i in file_issues
+            if e.line_start <= (i.line_start or 0) <= e.line_end
+        ]
+        worst_sev = "clean"
+        for i in entity_issues:
+            if _SEV_ORDER.get(i.severity, 0) > _SEV_ORDER.get(worst_sev, 0):
+                worst_sev = i.severity
+
+        node_id = e.id
+        name_to_id.setdefault(e.qualified_name, []).append(node_id)
+        name_to_id.setdefault(e.name, []).append(node_id)
+
+        calls_raw = _json.loads(e.calls or "[]")
+        nodes.append({
+            "id":             node_id,
+            "label":          e.name,
+            "qualified_name": e.qualified_name,
+            "entity_type":    e.entity_type,
+            "file_path":      e.file_path,
+            "line_start":     e.line_start,
+            "line_end":       e.line_end,
+            "parent_name":    e.parent_name,
+            "calls":          calls_raw,
+            "loc":            e.loc,
+            "issue_count":    len(entity_issues),
+            "severity":       worst_sev,
+            "issues":         [
+                {"severity": i.severity, "rule_id": i.rule_id,
+                 "message": (i.message or "")[:80], "line": i.line_start}
+                for i in entity_issues[:3]
+            ],
+        })
+
+    node_ids = {n["id"] for n in nodes}
+    edges = []
+    seen: set = set()
+
+    for n in nodes:
+        # Method → class containment edge
+        if n["parent_name"] and n["entity_type"] == "method":
+            parent_ids = name_to_id.get(n["parent_name"], [])
+            for pid in parent_ids:
+                if pid in node_ids:
+                    key = (pid, n["id"])
+                    if key not in seen:
+                        seen.add(key)
+                        edges.append({"source": pid, "target": n["id"], "type": "contains"})
+        # Call edges
+        for called in n.get("calls", []):
+            targets = name_to_id.get(called, [])
+            for tid in targets:
+                if tid in node_ids and tid != n["id"]:
+                    key = (n["id"], tid)
+                    if key not in seen:
+                        seen.add(key)
+                        edges.append({"source": n["id"], "target": tid, "type": "calls"})
+
+    # Strip the `calls` list from nodes (keep small)
+    for n in nodes:
+        del n["calls"]
+
+    type_counts = {}
+    for n in nodes:
+        type_counts[n["entity_type"]] = type_counts.get(n["entity_type"], 0) + 1
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "stats": {
+            "total_entities": len(nodes),
+            "total_edges":    len(edges),
+            "functions":      type_counts.get("function", 0),
+            "methods":        type_counts.get("method", 0),
+            "classes":        type_counts.get("class", 0),
+            "critical":       sum(1 for n in nodes if n["severity"] == "critical"),
+            "major":          sum(1 for n in nodes if n["severity"] == "major"),
         },
     }

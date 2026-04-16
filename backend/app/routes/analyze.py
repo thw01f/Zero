@@ -186,6 +186,29 @@ async def analyze_code(req: CodeAnalysisRequest):
     }
 
 
+class ExplainRequest(BaseModel):
+    file_path: str = ""
+    line: int = 0
+    severity: str = "info"
+    rule_id: Optional[str] = None
+    message: str = ""
+    code_context: Optional[str] = None
+    language: str = "unknown"
+    cwe_id: Optional[str] = None
+    owasp_category: Optional[str] = None
+
+
+@router.post("/explain")
+async def explain_finding_endpoint(req: ExplainRequest):
+    from ..mcp.llm_layer import explain_finding
+    finding = {
+        "file_path": req.file_path, "line": req.line, "severity": req.severity,
+        "rule_id": req.rule_id, "message": req.message,
+        "cwe_id": req.cwe_id, "owasp_category": req.owasp_category,
+    }
+    return await explain_finding(finding, req.code_context, req.language)
+
+
 @router.get("/models")
 async def list_models():
     """List available LLM backends."""
