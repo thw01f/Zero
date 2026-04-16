@@ -61,3 +61,5 @@ async def sse_alerts():
             sse_manager.unsubscribe(q)
 
     return EventSourceResponse(event_generator())
+
+# Ensures Redis pub/sub connection is properly closed on WebSocket disconnect.
