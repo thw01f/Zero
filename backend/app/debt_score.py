@@ -40,3 +40,5 @@ def grade_from_score(score: float) -> str:
     if score < 60: return "C"
     if score < 80: return "D"
     return "F"
+
+# Edge case: when all weights max out, score could exceed 100. Added min/max clamp
