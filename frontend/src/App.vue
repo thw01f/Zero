@@ -233,15 +233,14 @@ function doSearch() {
 }
 async function doScan() {
   const url = repoUrl.value.trim()
-  if (!url) return
+  if (!url || scanStore.status === 'running') return
   try {
-    const r = await fetch('/api/scan', {
-      method: 'POST',
-      headers: { ...auth.authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_url: url }),
-    })
-    if (r.ok) { notifs.push('info', 'Scan queued', `Scanning ${url}…`); router.push('/') }
-  } catch {}
+    await scanStore.submitScan(url, 'auto')
+    notifs.push('info', 'Scan queued', `Scanning ${url}…`)
+    router.push('/')
+  } catch (err: any) {
+    notifs.push('error', 'Scan failed', err?.response?.data?.detail || String(err))
+  }
 }
 
 async function doUpload(e: Event) {
@@ -251,21 +250,11 @@ async function doUpload(e: Event) {
   form.append('file', file)
   form.append('language', 'auto')
   try {
-    const r = await fetch('/api/scan/upload', {
-      method: 'POST',
-      headers: auth.authHeaders(),
-      body: form,
-    })
-    if (r.ok) {
-      const d = await r.json()
-      notifs.push('info', 'Upload scan queued', `Scanning ${file.name}…`)
-      router.push('/')
-    } else {
-      const d = await r.json()
-      notifs.push('error', 'Upload failed', d.detail || 'Unknown error')
-    }
-  } catch (err) {
-    notifs.push('error', 'Upload failed', String(err))
+    await scanStore.submitUpload(form)
+    notifs.push('info', 'Upload scan queued', `Scanning ${file.name}…`)
+    router.push('/')
+  } catch (err: any) {
+    notifs.push('error', 'Upload failed', err?.response?.data?.detail || String(err))
   }
   ;(e.target as HTMLInputElement).value = ''
 }

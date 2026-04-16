@@ -13,7 +13,7 @@ def get_report(job_id: str, db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job.status.value not in ("complete", "failed"):
+    if job.status.value == "queued":
         raise HTTPException(status_code=202, detail="Scan still in progress")
     return build_report_dict(job_id, db)
 

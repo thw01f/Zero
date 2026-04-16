@@ -32,11 +32,21 @@ def _run_in_background(job_id: str, repo_url: str, language: str, standards_doc)
     from ..database import SessionLocal
 
     def _run():
+        import logging as _log
+        _logger = _log.getLogger("app.tasks.bg")
         db = SessionLocal()
         try:
             asyncio.run(_scan_pipeline(job_id, repo_url, language, standards_doc, db))
-        except Exception:
-            pass
+        except Exception as _e:
+            _logger.error(f"Background scan {job_id[:8]} failed: {_e}", exc_info=True)
+            try:
+                from ..models import StatusEnum
+                _j = db.query(__import__('app.models', fromlist=['Job']).Job).filter_by(id=job_id).first()
+                if _j and _j.status.value not in ('complete',):
+                    _j.status = StatusEnum.failed
+                    db.commit()
+            except Exception:
+                pass
         finally:
             db.close()
 

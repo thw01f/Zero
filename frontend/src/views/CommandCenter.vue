@@ -147,13 +147,46 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useReportStore } from '../stores/report'
 import { useScanStore } from '../stores/scan'
 import StatCard from '../components/StatCard.vue'
 
 const report = useReportStore()
-const scan = useScanStore()
+const scan   = useScanStore()
+
+async function loadLatestDone() {
+  try {
+    const r = await fetch('/api/scan/jobs?limit=10', {
+      headers: { Authorization: `Bearer ${localStorage.getItem('dl_token') || ''}` }
+    })
+    if (!r.ok) return
+    const jobs = await r.json()
+    const done = jobs.find((j: any) => j.status === 'complete')
+    if (done) {
+      scan.jobId    = done.job_id
+      scan.status   = 'complete'
+      scan.progress = 100
+      await report.fetchReport(done.job_id)
+    }
+  } catch {}
+}
+
+onMounted(async () => {
+  if (!report.data) {
+    if (scan.jobId && scan.status === 'complete') {
+      await report.fetchReport(scan.jobId)
+    } else {
+      await loadLatestDone()
+    }
+  }
+})
+
+watch(() => scan.status, async (s) => {
+  if (s === 'complete' && scan.jobId) {
+    await report.fetchReport(scan.jobId)
+  }
+})
 
 function gradeToColor(g: string): 'green' | 'blue' | 'yellow' | 'orange' | 'red' | 'default' {
   const map: Record<string, 'green' | 'blue' | 'yellow' | 'orange' | 'red'> = {
