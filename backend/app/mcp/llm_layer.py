@@ -8,27 +8,40 @@ from .base import Finding
 logger = logging.getLogger(__name__)
 
 
-def _is_local() -> bool:
+def _get_backend() -> tuple[str, str]:
+    """Returns (provider, model) respecting runtime override → env config."""
+    try:
+        from ..routes.models import get_runtime_override
+        ov = get_runtime_override()
+        if ov.get("provider") and ov.get("model"):
+            return ov["provider"], ov["model"]
+    except Exception:
+        pass
     if settings.use_local_llm:
-        return True
+        return "ollama", settings.ollama_model
     if settings.anthropic_api_key.startswith("sk-ant-your") or settings.anthropic_api_key == "sk-ant-changeme":
-        return True
-    return False
+        return "ollama", settings.ollama_model
+    return "anthropic", settings.model
 
 
-def _call_anthropic(messages: list, max_tokens: int = 4096) -> str:
+def _is_local() -> bool:
+    provider, _ = _get_backend()
+    return provider == "ollama"
+
+
+def _call_anthropic(messages: list, max_tokens: int = 4096, model: str | None = None) -> str:
     import anthropic
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     resp = client.messages.create(
-        model=settings.model, max_tokens=max_tokens, messages=messages,
+        model=model or settings.model, max_tokens=max_tokens, messages=messages,
     )
     return resp.content[0].text
 
 
-def _call_ollama(messages: list, max_tokens: int = 4096) -> str:
+def _call_ollama(messages: list, max_tokens: int = 4096, model: str | None = None) -> str:
     import httpx
     payload = {
-        "model": settings.ollama_model,
+        "model": model or settings.ollama_model,
         "messages": messages,
         "stream": False,
         "options": {"num_predict": max_tokens, "temperature": 0.1},
@@ -39,9 +52,10 @@ def _call_ollama(messages: list, max_tokens: int = 4096) -> str:
 
 
 def _call(messages: list, max_tokens: int = 4096) -> str:
-    if _is_local():
-        return _call_ollama(messages, max_tokens)
-    return _call_anthropic(messages, max_tokens)
+    provider, model = _get_backend()
+    if provider == "ollama":
+        return _call_ollama(messages, max_tokens, model)
+    return _call_anthropic(messages, max_tokens, model)
 
 def _extract_json(text: str) -> dict:
     """Strip markdown fences and parse first JSON object/array found."""

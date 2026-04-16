@@ -28,6 +28,7 @@ const router = createRouter({
     { path: '/history',      component: () => import('../views/ScanHistory.vue') },
     { path: '/settings',     component: () => import('../views/Settings.vue') },
     { path: '/compare',      component: () => import('../views/RepoCompare.vue') },
+    { path: '/graph',        component: () => import('../views/CodeGraph.vue') },
     { path: '/profile',      component: () => import('../views/Profile.vue') },
   ],
 })
