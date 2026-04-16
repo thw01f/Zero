@@ -9,7 +9,7 @@
       <!-- ── Top Navigation ── -->
       <nav class="gc-nav">
         <div class="gc-nav-left">
-          <button class="gc-icon-btn sidebar-toggle" @click="sidebarOpen = !sidebarOpen" :title="sidebarOpen ? 'Collapse' : 'Expand'">
+          <button class="gc-icon-btn sidebar-toggle" @click="toggleSidebar" :title="sidebarOpen ? 'Collapse' : 'Expand'">
             <AppIcon name="menu" :size="18" />
           </button>
           <router-link to="/" class="nav-logo">
@@ -71,10 +71,13 @@
         </div>
       </nav>
 
+      <!-- mobile sidebar overlay -->
+      <div v-if="mobileSidebarOpen" class="mobile-sidebar-overlay" @click="mobileSidebarOpen = false" />
+
       <!-- ── Body ── -->
       <div class="app-body">
         <!-- ── Sidebar ── -->
-        <aside class="gc-sidebar" :class="{collapsed: !sidebarOpen}">
+        <aside class="gc-sidebar" :class="{collapsed: !sidebarOpen, 'mobile-open': mobileSidebarOpen}">
           <div class="sidebar-scan">
             <template v-if="sidebarOpen">
               <div class="scan-input-wrap">
@@ -108,7 +111,7 @@
                 :to="item.path"
                 class="sidebar-item"
                 :class="{active: $route.path === item.path}"
-                @click="closeMenus"
+                @click="closeSidebarAndMenus"
                 :title="!sidebarOpen ? item.label : undefined">
                 <span class="sidebar-icon"><AppIcon :name="item.icon" :size="16" /></span>
                 <span v-if="sidebarOpen" class="sidebar-label">{{ item.label }}</span>
@@ -159,7 +162,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { useNotificationsStore } from './stores/notifications'
@@ -173,13 +176,15 @@ const auth      = useAuthStore()
 const notifs    = useNotificationsStore()
 const scanStore = useScanStore()
 
-const theme        = ref(localStorage.getItem('dl_theme') || 'dark')
-const sidebarOpen  = ref(true)
-const showUserMenu = ref(false)
-const showAlerts   = ref(false)
-const searchQ      = ref('')
-const repoUrl      = ref('')
-const avatarWrap   = ref<HTMLElement | null>(null)
+const theme             = ref(localStorage.getItem('dl_theme') || 'dark')
+const sidebarOpen       = ref(true)
+const mobileSidebarOpen = ref(false)
+const isMobile          = ref(window.innerWidth < 768)
+const showUserMenu      = ref(false)
+const showAlerts        = ref(false)
+const searchQ           = ref('')
+const repoUrl           = ref('')
+const avatarWrap        = ref<HTMLElement | null>(null)
 
 const isAuthRoute = computed(() => ['/login', '/register', '/demo'].includes(route.path))
 
@@ -187,8 +192,25 @@ onMounted(() => {
   document.documentElement.setAttribute('data-theme', theme.value)
   auth.fetchMe()
   document.addEventListener('click', handleOutside)
+  window.addEventListener('resize', handleResize)
 })
-onBeforeUnmount(() => document.removeEventListener('click', handleOutside))
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleOutside)
+  window.removeEventListener('resize', handleResize)
+})
+
+function handleResize() {
+  isMobile.value = window.innerWidth < 768
+  if (!isMobile.value) mobileSidebarOpen.value = false
+}
+
+function toggleSidebar() {
+  if (isMobile.value) {
+    mobileSidebarOpen.value = !mobileSidebarOpen.value
+  } else {
+    sidebarOpen.value = !sidebarOpen.value
+  }
+}
 
 function handleOutside(e: MouseEvent) {
   if (avatarWrap.value && !avatarWrap.value.contains(e.target as Node)) {
@@ -196,6 +218,7 @@ function handleOutside(e: MouseEvent) {
   }
 }
 function closeMenus()  { showUserMenu.value = false; showAlerts.value = false }
+function closeSidebarAndMenus() { closeMenus(); mobileSidebarOpen.value = false }
 function goProfile()   { router.push('/profile');  closeMenus() }
 function goSettings()  { router.push('/settings'); closeMenus() }
 function doLogout()    { auth.logout(); router.push('/login'); closeMenus() }
@@ -280,7 +303,7 @@ const navSections = [
   ]},
   { label: 'Infrastructure', items: [
     { path: '/infra',   icon: 'docker', label: 'Infra Posture' },
-    { path: '/siem',    icon: 'eye',    label: 'SIEM',         badge: 'EVE' },
+    { path: '/siem',    icon: 'eye',    label: 'Live Logs',    badge: 'LIVE' },
     { path: '/updates', icon: 'update', label: 'Update Center' },
   ]},
   { label: 'System', items: [
@@ -460,4 +483,58 @@ const navSections = [
 .menu-fade-enter-from,  .menu-fade-leave-to       { opacity:0; transform:translateY(-6px); }
 .slide-right-enter-active,.slide-right-leave-active { transition:transform .2s ease; }
 .slide-right-enter-from,.slide-right-leave-to       { transform:translateX(100%); }
+
+/* ── Mobile responsive ──────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Hide search bar on mobile — save nav space */
+  .gc-nav-center { display: none; }
+
+  /* Collapse right nav items */
+  .gc-nav-right > *:not(.notif-btn):not([class*="nav-avatar"]) {
+    display: none;
+  }
+
+  /* Sidebar becomes a fixed overlay on mobile */
+  .gc-sidebar {
+    position: fixed !important;
+    top: var(--nav-height);
+    left: 0;
+    height: calc(100vh - var(--nav-height));
+    z-index: 150;
+    width: var(--sidebar-width) !important;
+    transform: translateX(-110%);
+    transition: transform .25s cubic-bezier(.4,0,.2,1), box-shadow .25s;
+    box-shadow: none;
+  }
+  .gc-sidebar.mobile-open {
+    transform: translateX(0);
+    box-shadow: 6px 0 32px rgba(0,0,0,.5);
+  }
+  /* Ignore collapsed state on mobile — always show full width sidebar */
+  .gc-sidebar.collapsed                       { width: var(--sidebar-width) !important; }
+  .gc-sidebar.collapsed .sidebar-section-label{ display: block; }
+  .gc-sidebar.collapsed .sidebar-label        { display: block; }
+  .gc-sidebar.collapsed .sidebar-chip         { display: block; }
+  .gc-sidebar.collapsed .sidebar-item         { justify-content: flex-start; padding: 7px 12px; }
+  .gc-sidebar.collapsed .sidebar-icon         { width: auto; }
+
+  /* Content takes full width since sidebar is overlay */
+  .app-content { padding: 14px 12px; }
+
+  /* Notifications panel full-width on mobile */
+  .alerts-panel { width: 100%; }
+}
+
+/* Mobile sidebar backdrop */
+.mobile-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  top: var(--nav-height);
+  background: rgba(0,0,0,.55);
+  z-index: 149;
+  display: none;
+}
+@media (max-width: 768px) {
+  .mobile-sidebar-overlay { display: block; }
+}
 </style>

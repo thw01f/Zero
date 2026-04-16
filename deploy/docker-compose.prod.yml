@@ -1,0 +1,70 @@
+version: "3.9"
+
+# ── DarkLead Production — Digital Ocean ──────────────────────────────────────
+# Domain: zero.darklead.org
+# Stack:  nginx (SSL termination) → darklead app (supervisord: Redis+Celery+API)
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Application (API + Celery + Redis in one container via supervisord) ──
+  darklead:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: darklead_app
+    restart: unless-stopped
+    env_file:
+      - ../.env.prod
+    environment:
+      DATABASE_URL: "sqlite:////data/darklead.db"
+      REDIS_URL: "redis://localhost:6379/0"
+      USE_LOCAL_LLM: "false"          # Cloud: use Gemini or Anthropic
+    volumes:
+      - darklead_data:/data
+      - darklead_clones:/tmp/darklead_clones
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  # ── Nginx reverse proxy + SSL ─────────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: darklead_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      darklead:
+        condition: service_healthy
+    networks:
+      - internal
+
+  # ── Certbot (cert renewal) ────────────────────────────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    container_name: darklead_certbot
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
+      - /var/www/certbot:/var/www/certbot
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --quiet --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done"
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  darklead_data:
+  darklead_clones:
