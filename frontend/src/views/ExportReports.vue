@@ -113,5 +113,20 @@
       </div>
     </template>
 <script setup lang="ts">
-// TODO: implement logic
+import { ref, computed } from 'vue'
+import { useScanStore } from '../stores/scan'
+import { useReportStore } from '../stores/report'
+
+const scan = useScanStore()
+const report = useReportStore()
+const copied = ref(false)
+const hovered = ref('')
+
+const shareUrl = computed(() => `${window.location.origin}?demo=${scan.jobId}`)
+
+function copyLink() {
+  navigator.clipboard.writeText(shareUrl.value).catch(() => {})
+  copied.value = true
+  setTimeout(() => { copied.value = false }, 2000)
+}
 </script>
