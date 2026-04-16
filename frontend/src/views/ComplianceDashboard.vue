@@ -90,6 +90,9 @@
         </div>
       </div>
     </template>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useReportStore } from '../stores/report'
