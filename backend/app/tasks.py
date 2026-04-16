@@ -141,3 +141,74 @@ async def _scan_pipeline(job_id: str, repo_url: str, language: str, standards_do
                 message=f.message,
                 tool=f.tool,
                 owasp_category=f.owasp_category,
+                cwe_id=f.cwe_id,
+                llm_explanation=f.llm_explanation,
+                fix_diff=fix_map.get(id(f)),
+            )
+            db.add(issue)
+
+        # Persist misconfigs
+        remediation_map = {id(f): rem for f, rem in with_remediations}
+        for f in misconfig_findings:
+            db.add(Misconfig(
+                id=str(uuid.uuid4()),
+                job_id=job_id,
+                tool=f.tool,
+                resource_type=f.resource_type or "Unknown",
+                file_path=f.file_path,
+                line_start=f.line_start,
+                check_id=f.check_id or f.rule_id,
+                title=f.message,
+                severity=f.severity,
+                remediation=remediation_map.get(id(f)),
+            ))
+
+        # Persist modules
+        for m in modules_data:
+            db.add(Module(**{**m, "job_id": job_id}))
+
+        db.commit()
+        ws({"event": "progress", "stage": "persisted", "progress": 90})
+
+        # 11. Summary
+        secret_count = sum(1 for f in triaged if f.category == "secret")
+        stats = {
+            "total": len(triaged),
+            "critical": sum(1 for f in triaged if f.severity == "critical"),
+            "major": sum(1 for f in triaged if f.severity == "major"),
+            "minor": sum(1 for f in triaged if f.severity == "minor"),
+            "misconfigs": len(misconfig_findings),
+            "secrets": secret_count,
+            "mandatory_updates": 0,
+            "scan_ms": int((time.time() - start_time) * 1000),
+        }
+        top_issues = [{"rule": f.rule_id, "severity": f.severity, "file": f.file_path, "message": f.message[:100]}
+                      for f in sorted(triaged, key=lambda x: {"critical": 0, "major": 1, "minor": 2, "info": 3}.get(x.severity, 4))[:10]]
+        top_mods = [{"path": m["path"], "score": m["debt_score"], "grade": m["grade"]}
+                    for m in modules_data[:5]]
+
+        summary = await generate_summary(repo_url, language, stats, top_issues, top_mods)
+        ws({"event": "llm_done", "stage": "summary", "progress": 95})
+
+        # 12. Finalize job
+        scan_time_ms = int((time.time() - start_time) * 1000)
+        overall_debt = weighted_avg_debt(modules_data)
+
+        j = db.query(Job).filter(Job.id == job_id).first()
+        if j:
+            j.status = StatusEnum.complete
+            j.progress = 100
+            j.scan_time_ms = scan_time_ms
+            j.summary_narrative = summary
+            j.overall_debt_score = overall_debt
+            j.overall_grade = grade_from_score(overall_debt)
+            j.completed_at = datetime.datetime.utcnow()
+            db.commit()
+
+        ws({"event": "complete", "progress": 100, "scan_time_ms": scan_time_ms})
+
+    except Exception as e:
+        logger.error(f"Pipeline failed: {e}", exc_info=True)
+        ws({"event": "error", "message": str(e), "progress": -1})
+        raise
+    finally:
