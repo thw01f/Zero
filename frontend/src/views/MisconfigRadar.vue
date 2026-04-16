@@ -59,6 +59,17 @@
                   </td>
                 </tr>
               </template>
+              <tr v-if="!filtered.length">
+                <td colspan="6" class="text-center py-8" style="color:#4a5568">No misconfigurations found</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </template>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useReportStore } from '../stores/report'
