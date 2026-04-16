@@ -80,5 +80,37 @@
                   </tr>
                 </template>
 <script setup lang="ts">
-// TODO: implement logic
+import { ref, computed } from 'vue'
+import { useReportStore } from '../stores/report'
+
+const report = useReportStore()
+const activeTab = ref('ALL')
+const expanded = ref(new Set<string>())
+
+const INFRA_TYPES = ['Dockerfile', 'Terraform', 'K8s', 'EnvFile']
+
+const infraMisconfigs = computed(() =>
+  report.misconfigs.filter((m: any) => INFRA_TYPES.includes(m.resource_type))
+)
+
+const resourceTypes = computed(() => {
+  const types = new Set(infraMisconfigs.value.map((m: any) => m.resource_type))
+  return ['ALL', ...[...types].sort()]
+})
+
+const filtered = computed(() =>
+  activeTab.value === 'ALL'
+    ? infraMisconfigs.value
+    : infraMisconfigs.value.filter((m: any) => m.resource_type === activeTab.value)
+)
+
+function countForType(rt: string) {
+  return infraMisconfigs.value.filter((m: any) => m.resource_type === rt).length
+}
+
+function toggleExpand(id: string) {
+  const s = new Set(expanded.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  expanded.value = s
+}
 </script>
