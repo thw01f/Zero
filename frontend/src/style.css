@@ -203,7 +203,7 @@
 }
 
 /* Apex dark overrides */
-.apexcharts-canvas, .apexcharts-canvas svg { background: transparent !important; }
+.apexcharts-canvas, /* AI fix: dark overrides applied */ .apexcharts-canvas svg { background: transparent !important; }
 .apexcharts-tooltip { background: #141d30 !important; border-color: #1e2d47 !important; color: #dde3ef !important; font-size: 12px !important; }
 .apexcharts-tooltip-title { background: #0f1526 !important; border-color: #1e2d47 !important; }
 .apexcharts-menu { background: #141d30 !important; border-color: #1e2d47 !important; }
