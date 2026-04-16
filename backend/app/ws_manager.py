@@ -28,32 +28,3 @@ class WsManager:
                 await ws.send_json(message)
             except Exception:
                 dead.append(ws)
-        for ws in dead:
-            self.disconnect(job_id, ws)
-
-
-class SseManager:
-    def __init__(self):
-        self.subscribers: List[asyncio.Queue] = []
-
-    async def subscribe(self) -> asyncio.Queue:
-        q: asyncio.Queue = asyncio.Queue(maxsize=100)
-        self.subscribers.append(q)
-        return q
-
-    def unsubscribe(self, q: asyncio.Queue):
-        self.subscribers = [s for s in self.subscribers if s != q]
-
-    async def publish(self, event: dict):
-        dead = []
-        for q in self.subscribers:
-            try:
-                q.put_nowait(event)
-            except asyncio.QueueFull:
-                dead.append(q)
-        for q in dead:
-            self.unsubscribe(q)
-
-
-ws_manager = WsManager()
-sse_manager = SseManager()
