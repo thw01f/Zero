@@ -1,3 +1,6 @@
+
+# DarkLead — AI-Powered Code Review & Technical Debt Analyzer
+
 ---
 title: DarkLead
 emoji: 🔍
@@ -6,8 +9,6 @@ colorTo: orange
 sdk: docker
 app_port: 7860
 ---
-
-# DarkLead — AI-Powered Code Review & Technical Debt Analyzer
 
 > **TENSOR'26 Hackathon — PS29** | Team DARKLEAD! | Built by Claude Sonnet 4.6 + w01f
 
