@@ -1,8 +1,8 @@
 
-# DarkLead — AI-Powered Code Review & Technical Debt Analyzer
+# Zero Framework — AI-Powered Code Review & Technical Debt Analyzer
 
 ---
-title: DarkLead
+title: Zero Framework
 emoji: 🔍
 colorFrom: violet
 colorTo: orange
@@ -18,7 +18,7 @@ app_port: 7860
 [![Commits](https://img.shields.io/badge/commits-303-blue)](#)
 [![AI](https://img.shields.io/badge/built%20by-Claude%20Sonnet%204.6-blueviolet)](#)
 
-DarkLead is a production-grade SAST platform combining **19 static analysis tools** + **local LLM analysis** (Ollama `qwen2.5-coder:14b`) with a professional FortiAnalyzer-themed dashboard.
+Zero Framework is a production-grade SAST platform combining **19 static analysis tools** + **local LLM analysis** (Ollama `qwen2.5-coder:14b`) with a professional FortiAnalyzer-themed dashboard.
 
 ---
 
