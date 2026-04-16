@@ -132,5 +132,49 @@
                 </tr>
               </template>
 <script setup lang="ts">
-// TODO: implement logic
+import { ref } from 'vue'
+import axios from 'axios'
+
+const code = ref('')
+const language = ref('auto')
+const mode = ref('full')
+const filename = ref('')
+const loading = ref(false)
+const error = ref('')
+const result = ref<any>(null)
+const expandedFindings = ref(new Set<number>())
+
+async function analyze() {
+  if (!code.value.trim()) return
+  loading.value = true
+  error.value = ''
+  result.value = null
+  try {
+    const { data } = await axios.post('/api/analyze/code', {
+      code: code.value,
+      language: language.value,
+      mode: mode.value,
+      filename: filename.value || null,
+    })
+    result.value = data
+  } catch (e: any) {
+    error.value = e.response?.data?.detail || e.message
+  } finally {
+    loading.value = false
+  }
+}
+
+function toggleFinding(i: number) {
+  const s = new Set(expandedFindings.value)
+  s.has(i) ? s.delete(i) : s.add(i)
+  expandedFindings.value = s
+}
+
+function priorityClass(p: string) {
+  const map: Record<string, string> = {
+    high: 'sev-critical', medium: 'sev-major', low: 'sev-minor',
+    critical: 'sev-critical', info: 'sev-info',
+  }
+  return map[(p || '').toLowerCase()] ?? 'sev-info'
+}
 </script>
