@@ -15,5 +15,12 @@
   </div>
 </template>
 <script setup lang="ts">
-// TODO: implement logic
+import { useAlertsStore } from '../stores/alerts'
+const alertsStore = useAlertsStore()
+const alertIcon = (type: string) => ({ advisory: '🔴', self_health_alert: '⚠️', scan_complete: '✅' }[type] || '📣')
+const alertText = (a: any) => {
+  if (a.type === 'advisory') return `New advisory: ${a.data?.advisory_id || 'CVE'}`
+  if (a.type === 'scan_complete') return 'Scan completed'
+  return a.type
+}
 </script>
