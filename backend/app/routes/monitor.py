@@ -19,7 +19,7 @@ def list_advisories(
 ):
     q = db.query(Advisory)
     if project_id:
-        q = q.filter(Advisory.project_id == project_id)
+        pass  # Advisory is global; project_id filter not applicable
     if unread_only:
         q = q.filter(Advisory.is_read == False)
     if severity:

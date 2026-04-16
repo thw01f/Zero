@@ -54,13 +54,11 @@ class ModuleSchema(BaseModel):
     path: str
     loc: int
     complexity_avg: float
-    complexity_max: float
-    churn_score: float
+    max_complexity: int
+    churn_count: int
     debt_score: float
     grade: str
-    issue_count_critical: int
-    issue_count_major: int
-    issue_count_minor: int
+    issue_counts: Optional[str] = None  # JSON {"critical":1,"major":3,...}
 
 
 class MisconfigSchema(BaseModel):
@@ -105,7 +103,7 @@ class AdvisorySchema(BaseModel):
 
 
 class ComplianceSchema(BaseModel):
-    framework: str
+    standard: str
     control_id: str
     control_name: str
     status: str
@@ -160,11 +158,9 @@ class ChatRequest(BaseModel):
 
 class SelfHealthSchema(BaseModel):
     id: str
-    captured_at: str
+    created_at: str
     scanner_versions: Dict[str, str]
     own_cve_count: int
     disk_free_gb: float
     redis_queue_depth: int
-    last_advisory_poll: Optional[str] = None
-    celery_workers: int
     status: str

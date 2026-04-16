@@ -189,7 +189,7 @@ def _dep_to_dict(d) -> dict:
 
 def _compliance_to_dict(c) -> dict:
     return {
-        "framework": c.standard, "control_id": c.control_id,
+        "standard": c.standard, "control_id": c.control_id,
         "control_name": c.control_name, "status": c.status,
         "issue_count": c.issue_count, "evidence": __import__('json').loads(c.evidence) if c.evidence else [],
     }

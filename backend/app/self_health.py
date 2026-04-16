@@ -70,25 +70,32 @@ async def capture_snapshot() -> dict:
     if disk_free_gb < 1.0:
         status = "critical"
 
-    snap = {
+    snap_dict = {
         "id": str(uuid.uuid4()),
-        "captured_at": datetime.datetime.utcnow().isoformat(),
-        "scanner_versions": versions,
-        "own_cve_count": own_cves,
+        "created_at": datetime.datetime.utcnow().isoformat(),
+        "scanner_versions": json.dumps(versions),
+        "own_cves": json.dumps(own_cves),   # stored as integer count
         "disk_free_gb": disk_free_gb,
         "redis_queue_depth": redis_depth,
-        "last_advisory_poll": None,
-        "celery_workers": 1,
         "status": status,
     }
 
     # Persist
     try:
         db = SessionLocal()
-        db.add(SelfHealthSnapshot(**snap))
+        db.add(SelfHealthSnapshot(**snap_dict))
         db.commit()
         db.close()
     except Exception as e:
         logger.warning(f"Self-health persist failed: {e}")
 
-    return snap
+    # Return human-readable form
+    return {
+        "id": snap_dict["id"],
+        "created_at": snap_dict["created_at"],
+        "scanner_versions": versions,
+        "own_cve_count": own_cves,
+        "disk_free_gb": disk_free_gb,
+        "redis_queue_depth": redis_depth,
+        "status": status,
+    }
