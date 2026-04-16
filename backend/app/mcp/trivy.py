@@ -1,40 +1,41 @@
-import asyncio, json
+import asyncio, json, os, tempfile
 from typing import List
 from .base import BaseTool, Finding
 
-SEV_MAP = {"CRITICAL": "critical", "HIGH": "major", "MEDIUM": "minor", "LOW": "info"}
+SEV = {"CRITICAL": "critical", "HIGH": "major", "MEDIUM": "minor", "LOW": "info"}
 
 
 class TrivyTool(BaseTool):
     name = "trivy"
     languages = ["all"]
-    category = "dep"
+    category = "dependency"
     binary = "trivy"
 
     async def run(self, repo_path: str, language: str) -> List[Finding]:
+        if not self._available():
+            return []
         try:
+            out = tempfile.mktemp(suffix=".json")
             proc = await asyncio.create_subprocess_exec(
-                "trivy", "fs", repo_path, "--format", "json",
-                "--quiet", "--exit-code", "0",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
+                "trivy", "fs", "--format", "json", "--output", out,
+                "--quiet", "--exit-code", "0", repo_path,
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
-            data = json.loads(stdout)
+            await asyncio.wait_for(proc.communicate(), timeout=120)
+            data = json.loads(open(out).read())
+            os.unlink(out)
+            findings = []
+            for result in data.get("Results", []):
+                for vuln in result.get("Vulnerabilities", []) or []:
+                    findings.append(Finding(
+                        file_path=result.get("Target", ""),
+                        line_start=0,
+                        severity=SEV.get(vuln.get("Severity", "LOW"), "info"),
+                        category="dependency",
+                        rule_id=vuln.get("VulnerabilityID", "CVE"),
+                        message=f"{vuln.get('PkgName','')} {vuln.get('InstalledVersion','')}: {vuln.get('Title','')}",
+                        tool="trivy",
+                    ))
+            return findings
         except Exception:
             return []
-
-        findings = []
-        for result in data.get("Results", []):
-            target = result.get("Target", "")
-            for vuln in result.get("Vulnerabilities", []):
-                findings.append(Finding(
-                    file_path=target,
-                    line_start=0,
-                    severity=SEV_MAP.get(vuln.get("Severity", "LOW"), "info"),
-                    category="dep",
-                    rule_id=vuln.get("VulnerabilityID", "CVE-UNKNOWN"),
-                    message=f"{vuln.get('PkgName')} {vuln.get('InstalledVersion')}: {vuln.get('Title', vuln.get('Description', '')[:100])}",
-                    tool="trivy",
-                ))
-        return findings
