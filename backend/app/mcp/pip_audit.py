@@ -1,5 +1,4 @@
 import asyncio, json
-from pathlib import Path
 from typing import List
 from .base import BaseTool, Finding
 
@@ -7,35 +6,33 @@ from .base import BaseTool, Finding
 class PipAuditTool(BaseTool):
     name = "pip-audit"
     languages = ["python"]
-    category = "dep"
+    category = "dependency"
     binary = "pip-audit"
 
     async def run(self, repo_path: str, language: str) -> List[Finding]:
-        req_files = list(Path(repo_path).rglob("requirements*.txt"))
-        if not req_files:
+        if language not in self.languages or not self._available():
             return []
-
-        findings = []
-        for req_file in req_files[:3]:
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    "pip-audit", "-r", str(req_file), "--format", "json", "--progress-spinner", "off",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.DEVNULL,
-                )
-                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60)
-                data = json.loads(stdout)
-                for dep in data.get("dependencies", []):
-                    for vuln in dep.get("vulns", []):
-                        findings.append(Finding(
-                            file_path=str(req_file.relative_to(repo_path)),
-                            line_start=0,
-                            severity="major",
-                            category="dep",
-                            rule_id=vuln.get("id", "pip-audit"),
-                            message=f"{dep.get('name')} {dep.get('version')}: {vuln.get('description', '')[:200]}",
-                            tool="pip-audit",
-                        ))
-            except Exception:
-                continue
-        return findings
+        req = f"{repo_path}/requirements.txt"
+        import os
+        if not os.path.exists(req):
+            return []
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "pip-audit", "-r", req, "--format", "json", "--progress-spinner", "off",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
+            data = json.loads(stdout)
+            findings = []
+            for dep in data.get("dependencies", []):
+                for vuln in dep.get("vulns", []):
+                    findings.append(Finding(
+                        file_path="requirements.txt", line_start=0,
+                        severity="major", category="dependency",
+                        rule_id=vuln.get("id", "CVE"),
+                        message=f"{dep.get('name','')} {dep.get('version','')}: {vuln.get('description','')[:100]}",
+                        tool="pip-audit",
+                    ))
+            return findings
+        except Exception:
+            return []
