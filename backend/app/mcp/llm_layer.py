@@ -44,3 +44,5 @@ def _call(messages: list, max_tokens: int = 4096) -> str:
     return _call_anthropic(messages, max_tokens)
 
 # LLM sometimes wraps JSON in markdown fences. Added _extract_json() with multiple
+
+# PERF: httpx.Client instance reused across LLM calls. Connection pool size set to 4.
