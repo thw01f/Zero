@@ -96,6 +96,24 @@
                   </td>
                 </tr>
               </template>
+              <tr v-if="!paginated.length">
+                <td colspan="9" class="text-center py-8" style="color:#4a5568">No issues match filters</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pagination -->
+      <div class="flex items-center justify-between">
+        <button class="ft-btn ft-btn-secondary" :disabled="page === 0" @click="page--">Prev</button>
+        <span class="text-xs" style="color:#8a96b0">Page {{ page + 1 }} of {{ totalPages }}</span>
+        <button class="ft-btn ft-btn-secondary" :disabled="page >= totalPages - 1" @click="page++">Next</button>
+      </div>
+    </template>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useReportStore } from '../stores/report'
