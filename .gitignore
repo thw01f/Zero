@@ -1,0 +1,14 @@
+.env
+**/.env
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+darklead.db
+/tmp/darklead_*
+node_modules/
+frontend/dist/
+.DS_Store
+*.egg-info/
+.venv/
+venv/

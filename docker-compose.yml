@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "7860:7860"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=sqlite:////data/darklead.db
+      - REDIS_URL=redis://localhost:6379/0
+    volumes:
+      - darklead_data:/data
+      - /tmp/darklead_clones:/tmp
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  darklead_data:
