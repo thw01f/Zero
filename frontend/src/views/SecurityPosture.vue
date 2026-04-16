@@ -102,5 +102,109 @@
       </div>
     </template>
 <script setup lang="ts">
-// TODO: implement logic
+import { computed } from 'vue'
+import { useReportStore } from '../stores/report'
+
+const report = useReportStore()
+
+const secrets = computed(() => report.issues.filter((i: any) => i.category === 'secret'))
+const securityIssues = computed(() => report.issues.filter((i: any) => i.category === 'security'))
+
+const securityScore = computed(() => {
+  if (!report.data) return 0
+  const c = report.criticalIssues.length
+  const s = secrets.value.length
+  const score = Math.max(0, 100 - c * 10 - s * 15 - securityIssues.value.length * 2)
+  return Math.min(100, score)
+})
+
+const gaugeOpts = computed(() => ({
+  chart: { background: 'transparent', foreColor: '#8a96b0', toolbar: { show: false } },
+  theme: { mode: 'dark' },
+  plotOptions: {
+    radialBar: {
+      startAngle: -135,
+      endAngle: 135,
+      hollow: { size: '55%' },
+      track: { background: '#1e2d47' },
+      dataLabels: {
+        name: { show: true, color: '#8a96b0', fontSize: '11px', offsetY: 20 },
+        value: {
+          color: securityScore.value >= 70 ? '#3ecf8e' : securityScore.value >= 40 ? '#f5a623' : '#f25555',
+          fontSize: '28px',
+          fontWeight: 700,
+          offsetY: -10,
+          formatter: (v: number) => v + '',
+        },
+      },
+    },
+  },
+  fill: {
+    type: 'gradient',
+    gradient: {
+      shade: 'dark',
+      type: 'horizontal',
+      colorStops: [
+        { offset: 0, color: '#f25555' },
+        { offset: 50, color: '#f5a623' },
+        { offset: 100, color: '#3ecf8e' },
+      ],
+    },
+  },
+  labels: ['Security Score'],
+  tooltip: { enabled: false },
+}))
+
+const OWASP_CATS = [
+  'A01 Broken Access Control',
+  'A02 Cryptographic Failures',
+  'A03 Injection',
+  'A04 Insecure Design',
+  'A05 Security Misconfiguration',
+  'A06 Vulnerable Components',
+  'A07 Auth Failures',
+  'A08 Data Integrity Failures',
+  'A09 Logging Failures',
+  'A10 SSRF',
+]
+
+const owaspRows = computed(() =>
+  OWASP_CATS.map(cat => {
+    const count = report.issues.filter((i: any) =>
+      (i.owasp_category || '').includes(cat.split(' ')[0])
+    ).length
+    return { cat, count }
+  })
+)
+
+const cweMap = computed(() => {
+  const m: Record<string, number> = {}
+  report.issues.forEach((i: any) => {
+    if (i.cwe_id) m[i.cwe_id] = (m[i.cwe_id] || 0) + 1
+  })
+  return m
+})
+
+const cweSeries = computed(() =>
+  Object.entries(cweMap.value)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+)
+
+const cweCounts = computed(() => cweSeries.value.map(e => e[1]))
+
+const cweOpts = computed(() => ({
+  chart: { background: 'transparent', foreColor: '#8a96b0', toolbar: { show: false } },
+  theme: { mode: 'dark' },
+  xaxis: {
+    categories: cweSeries.value.map(e => e[0]),
+    labels: { style: { colors: '#8a96b0', fontSize: '10px' } },
+  },
+  yaxis: { labels: { style: { colors: '#8a96b0', fontSize: '10px' } } },
+  colors: ['#f25555'],
+  dataLabels: { enabled: false },
+  plotOptions: { bar: { borderRadius: 2, horizontal: false } },
+  grid: { borderColor: '#1e2d47' },
+  tooltip: { theme: 'dark' },
+}))
 </script>
