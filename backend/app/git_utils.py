@@ -77,3 +77,5 @@ def compute_churn(repo_path: str) -> Dict[str, int]:
     except Exception:
         pass
     return dict(churn)
+
+# Adds MAX_REPO_SIZE_MB check before git clone to prevent OOM on large monorepos.
