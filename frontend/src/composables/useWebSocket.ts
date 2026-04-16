@@ -12,3 +12,16 @@ export function useWebSocket() {
     ws.onmessage = (e) => {
       try { onMessage(JSON.parse(e.data)) } catch {}
     }
+    ws.onclose = () => { connected.value = false }
+    ws.onerror = () => { connected.value = false }
+  }
+
+  function disconnect() {
+    ws?.close()
+    ws = null
+    connected.value = false
+  }
+
+  onUnmounted(disconnect)
+  return { connect, disconnect, connected }
+}
