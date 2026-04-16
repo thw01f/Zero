@@ -186,5 +186,70 @@
   </div>
 </template>
 <script setup lang="ts">
-// TODO: implement logic
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
+import ScanForm from './components/ScanForm.vue'
+import { useReportStore } from './stores/report'
+import { useScanStore } from './stores/scan'
+import { useAlertsStore } from './stores/alerts'
+import axios from 'axios'
+
+const route = useRoute()
+const report = useReportStore()
+const scan = useScanStore()
+const alertsStore = useAlertsStore()
+
+const sidebarOpen = ref(true)
+const alertsOpen = ref(false)
+const clock = ref('')
+const llmLabel = ref('Loading…')
+const llmBackend = ref('')
+const llmModel = ref('')
+
+const PAGE_TITLES: Record<string, string> = {
+  '/': 'Command Center', '/heatmap': 'Risk Heatmap', '/issues': 'Issue Tracker',
+  '/code-analysis': 'Code Analyzer', '/fixes': 'Fix Studio', '/security': 'Security Posture',
+  '/misconfig': 'Misconfig Radar', '/compliance': 'Compliance', '/infra': 'Infra Posture',
+  '/deps': 'Dependency Intel', '/updates': 'Update Center', '/advisories': 'Advisory Feed',
+  '/git': 'Git Intelligence', '/trends': 'Trend Analysis', '/ai': 'AI Assistant',
+  '/self-health': 'Self Health', '/export': 'Export Reports',
+}
+const pageTitle = computed(() => PAGE_TITLES[route.path] ?? 'DarkLead')
+const mandatoryCount = computed(() => report.depUpdates.filter((d: any) => d.classification === 'MANDATORY').length)
+const scanDotClass = computed(() => ({
+  'status-running': scan.status === 'running' || scan.status === 'queued',
+  'status-ok': scan.status === 'complete',
+  'status-critical': scan.status === 'failed',
+  'status-warn': scan.status === 'queued',
+}))
+
+let clockTimer: ReturnType<typeof setInterval>
+function tick() { clock.value = new Date().toLocaleTimeString('en-US', { hour12: false }) }
+
+async function loadLlm() {
+  try {
+    const { data } = await axios.get('/api/analyze/models')
+    llmBackend.value = data.active_backend
+    llmModel.value = data.active_model
+    const name = data.active_model.split(':')[0].replace('claude-', '')
+    llmLabel.value = data.active_backend === 'ollama' ? `Ollama / ${name}` : `Claude / ${name}`
+  } catch { llmLabel.value = 'LLM offline' }
+}
+
+onMounted(() => {
+  tick()
+  clockTimer = setInterval(tick, 1000)
+  alertsStore.connectSSE()
+  loadLlm()
+  const jobId = new URLSearchParams(window.location.search).get('demo')
+  if (jobId) {
+    report.fetchReport(jobId)
+    scan.jobId = jobId
+    scan.status = 'complete'
+  }
+})
+onUnmounted(() => {
+  clearInterval(clockTimer)
+  alertsStore.disconnect()
+})
 </script>
