@@ -17,6 +17,11 @@ from .routes import models as models_router
 from .routes import graph as graph_router
 from .routes import settings as settings_router
 from .routes import proxy as proxy_router
+from .routes import export as export_router
+from .routes import diff as diff_router
+from .routes import search as search_router
+from .routes import stats as stats_router
+from .routes import webhook as webhook_router
 from .routes.auth import hash_password
 
 logging.basicConfig(level=logging.INFO)
@@ -87,6 +92,11 @@ app.include_router(models_router.router, prefix="/api")
 app.include_router(graph_router.router, prefix="/api")
 app.include_router(settings_router.router, prefix="/api")
 app.include_router(proxy_router.router, prefix="/api")
+app.include_router(export_router.router, prefix="/api")
+app.include_router(diff_router.router, prefix="/api")
+app.include_router(search_router.router, prefix="/api")
+app.include_router(stats_router.router, prefix="/api")
+app.include_router(webhook_router.router, prefix="/api")
 
 # Serve frontend static files in production
 frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
