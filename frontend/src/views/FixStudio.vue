@@ -49,43 +49,6 @@
     </div>
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useReportStore } from '../stores/report'
-
-const report = useReportStore()
-
-const fixable = computed(() => report.issues.filter((i: any) => i.fix_diff))
-const accepted = computed(() => fixable.value.filter((i: any) => i.fix_accepted === 1).length)
-const acceptRate = computed(() =>
-  fixable.value.length ? Math.round((accepted.value / fixable.value.length) * 100) : 0
-)
-
-async function accept(id: string, val: boolean) {
-  await report.acceptFix(id, val)
-}
-
-function escHtml(s: string) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-function renderDiff(diff: string): string {
-  const lines = diff.split('\n').map(line => {
-    if (line.startsWith('+++') || line.startsWith('---')) {
-      return `<div style="color:#8a96b0;padding:2px 8px;background:#0f1526;font-family:'JetBrains Mono',monospace;font-size:11px">${escHtml(line)}</div>`
-    }
-    if (line.startsWith('+')) {
-      return `<div style="background:rgba(62,207,142,0.08);color:#3ecf8e;padding:2px 8px;font-family:'JetBrains Mono',monospace;font-size:11px">${escHtml(line)}</div>`
-    }
-    if (line.startsWith('-')) {
-      return `<div style="background:rgba(242,85,85,0.08);color:#f25555;padding:2px 8px;font-family:'JetBrains Mono',monospace;font-size:11px">${escHtml(line)}</div>`
-    }
-    if (line.startsWith('@@')) {
-      return `<div style="color:#4a9ff5;padding:2px 8px;background:#0f1526;font-family:'JetBrains Mono',monospace;font-size:11px">${escHtml(line)}</div>`
-    }
-    return `<div style="color:#dde3ef;padding:2px 8px;font-family:'JetBrains Mono',monospace;font-size:11px">${escHtml(line)}</div>`
-  })
-  return `<div style="background:#0a0e1a;border:1px solid #1e2d47;border-radius:3px;overflow-x:auto">${lines.join('')}</div>`
-}
+// TODO: implement logic
 </script>
