@@ -59,39 +59,6 @@
                   </td>
                 </tr>
               </template>
-              <tr v-if="!filtered.length">
-                <td colspan="6" class="text-center py-8" style="color:#4a5568">No misconfigurations found</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </template>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useReportStore } from '../stores/report'
-
-const report = useReportStore()
-const activeTab = ref('ALL')
-const expanded = ref(new Set<string>())
-
-const resourceTypes = computed(() => {
-  const types = new Set(report.misconfigs.map((m: any) => m.resource_type || m.tool || 'Other'))
-  return ['ALL', ...[...types].sort()]
-})
-
-const filtered = computed(() =>
-  activeTab.value === 'ALL'
-    ? report.misconfigs
-    : report.misconfigs.filter((m: any) => (m.resource_type || m.tool) === activeTab.value)
-)
-
-function toggleExpand(id: string) {
-  const s = new Set(expanded.value)
-  s.has(id) ? s.delete(id) : s.add(id)
-  expanded.value = s
-}
+// TODO: implement logic
 </script>
