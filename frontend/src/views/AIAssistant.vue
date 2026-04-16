@@ -87,6 +87,9 @@
         >Send</button>
       </div>
     </template>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
 import axios from 'axios'
