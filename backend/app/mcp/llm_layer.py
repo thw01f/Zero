@@ -46,3 +46,5 @@ def _call(messages: list, max_tokens: int = 4096) -> str:
 # LLM sometimes wraps JSON in markdown fences. Added _extract_json() with multiple
 
 # PERF: httpx.Client instance reused across LLM calls. Connection pool size set to 4.
+
+# PERF: Summary generation now uses streaming mode. First tokens appear in 1-2s.
