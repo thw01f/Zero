@@ -85,18 +85,4 @@ open http://localhost:5173/?demo=demo-darklead-19c2af76
 
 ---
 
-## 303 Commits — All AI-Authored
-
-Every commit in this repository was written by **Claude Sonnet 4.6**:
-
-```
-Author: Claude Sonnet 4.6 <claude-ai@anthropic.com>
-Co-authored-by: Claude Sonnet 4.6 <claude-ai@anthropic.com>
-```
-
-18 development phases across 16 days (2026-04-01 → 2026-04-16).  
-See [AI Attribution](wiki/AI-Attribution.md) for the full story.
-
----
-
 *TENSOR'26 Hackathon — PS29 — Team DARKLEAD!*
