@@ -484,6 +484,18 @@ const navSections = [
 .slide-right-enter-active,.slide-right-leave-active { transition:transform .2s ease; }
 .slide-right-enter-from,.slide-right-leave-to       { transform:translateX(100%); }
 
+/* ── Override style.css fixed-sidebar with flex layout ─────
+   style.css sets position:fixed on .gc-sidebar, which takes it
+   out of flow. We override to relative so the flex row works.   */
+.gc-nav     { position: relative !important; top: auto !important; }
+.gc-sidebar {
+  position: relative !important;
+  top: auto !important;
+  height: auto !important;
+  z-index: auto !important;
+}
+.app-body { padding-top: 0 !important; padding-left: 0 !important; }
+
 /* ── Mobile responsive ──────────────────────────────────── */
 @media (max-width: 768px) {
   /* Hide search bar on mobile — save nav space */

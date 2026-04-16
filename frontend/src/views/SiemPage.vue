@@ -247,11 +247,12 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 
 async function pollJobs() {
   try {
-    const r = await fetch('/api/scan/jobs?limit=10', { headers: auth.authHeaders() })
+    const r = await fetch('/api/scan/jobs?limit=20', { headers: auth.authHeaders() })
     if (!r.ok) return
     const jobs: any[] = await r.json()
     for (const j of jobs) {
-      if (j.status === 'running' && !wsMap.has(j.job_id)) {
+      // Only connect to jobs actively in progress
+      if ((j.status === 'running' || j.status === 'queued') && !wsMap.has(j.job_id)) {
         connectJob(j.job_id)
       }
     }
