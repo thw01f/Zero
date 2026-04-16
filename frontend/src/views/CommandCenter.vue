@@ -25,7 +25,7 @@
 
     <template v-else>
       <!-- Stat row -->
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
         <StatCard
           label="Total Issues"
           :value="report.issues.length"
@@ -58,6 +58,13 @@
           icon="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
         />
         <StatCard
+          label="Top CVE"
+          :value="report.data.top_cvss_score != null ? report.data.top_cvss_score.toFixed(1) : '—'"
+          :sub="report.data.advisories?.length ? report.data.advisories.length + ' advisories' : 'No CVEs'"
+          color="red"
+          icon="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+        />
+        <StatCard
           label="Scan Time"
           :value="report.data.scan_time_ms ? (report.data.scan_time_ms / 1000).toFixed(1) + 's' : '—'"
           color="default"
@@ -74,6 +81,7 @@
           <div class="ft-card-body">
             <apexchart
               v-if="categorySeries.length"
+              :key="'cat-' + categorySeries.join(',')"
               type="donut"
               height="220"
               :options="categoryChartOpts"
@@ -90,6 +98,7 @@
           <div class="ft-card-body">
             <apexchart
               v-if="top5Modules.length"
+              :key="'mod-' + top5Modules.map((m: any) => m.debt_score).join(',')"
               type="bar"
               height="220"
               :options="moduleChartOpts"
@@ -142,6 +151,43 @@
           </table>
         </div>
       </div>
+      <!-- CVE Advisories -->
+      <div v-if="report.data.advisories?.length" class="ft-card">
+        <div class="ft-card-header">
+          <span class="ft-card-title">Recent CVE Advisories</span>
+          <span class="ft-tag">{{ report.data.advisories.length }} tracked</span>
+        </div>
+        <div class="ft-card-body p-0">
+          <table class="ft-table">
+            <thead>
+              <tr>
+                <th>CVE ID</th>
+                <th>CVSS</th>
+                <th>Severity</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="adv in report.data.advisories.slice(0,10)" :key="adv.advisory_id">
+                <td>
+                  <a :href="adv.advisory_url" target="_blank" class="font-mono text-xs" style="color:#4a9ff5">
+                    {{ adv.advisory_id }}
+                  </a>
+                </td>
+                <td class="font-mono text-xs" :style="cvssColor(adv.cvss_score)">
+                  {{ adv.cvss_score?.toFixed(1) ?? '—' }}
+                </td>
+                <td>
+                  <span :class="'sev sev-' + adv.severity">{{ adv.severity }}</span>
+                </td>
+                <td class="text-xs truncate" style="max-width:300px;color:#8a96b0">
+                  {{ adv.title?.replace(adv.advisory_id + ': ', '') }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </template>
   </div>
 </template>
@@ -187,6 +233,14 @@ watch(() => scan.status, async (s) => {
     await report.fetchReport(scan.jobId)
   }
 })
+
+function cvssColor(score: number | null): Record<string, string> {
+  if (!score) return { color: '#8a96b0' }
+  if (score >= 9.0) return { color: '#f25555', fontWeight: 'bold' }
+  if (score >= 7.0) return { color: '#f26d21' }
+  if (score >= 4.0) return { color: '#f5a623' }
+  return { color: '#3ecf8e' }
+}
 
 function gradeToColor(g: string): 'green' | 'blue' | 'yellow' | 'orange' | 'red' | 'default' {
   const map: Record<string, 'green' | 'blue' | 'yellow' | 'orange' | 'red'> = {

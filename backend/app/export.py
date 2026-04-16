@@ -1,7 +1,7 @@
 import csv
 import io
 import json
-from .models import Job, Issue, Module, Misconfig, DepUpdate, ComplianceResult
+from .models import Job, Issue, Module, Misconfig, DepUpdate, ComplianceResult, Advisory
 from .database import SessionLocal
 
 
@@ -15,6 +15,7 @@ def build_report_dict(job_id: str, db) -> dict:
     misconfigs = db.query(Misconfig).filter(Misconfig.job_id == job_id).all()
     dep_updates = db.query(DepUpdate).filter(DepUpdate.job_id == job_id).all()
     compliance = db.query(ComplianceResult).filter(ComplianceResult.job_id == job_id).all()
+    advisories = db.query(Advisory).order_by(Advisory.cvss_score.desc().nullslast()).limit(20).all()
 
     sev_counts = {"critical": 0, "major": 0, "minor": 0, "info": 0}
     cat_counts: dict = {}
@@ -45,6 +46,17 @@ def build_report_dict(job_id: str, db) -> dict:
         "top_risks": top_risks,
         "secret_count": sum(1 for i in issues if i.category == "secret"),
         "mandatory_update_count": sum(1 for d in dep_updates if d.classification == "MANDATORY"),
+        "advisories": [
+            {
+                "advisory_id": a.advisory_id,
+                "title": a.title,
+                "severity": a.severity,
+                "cvss_score": a.cvss_score,
+                "advisory_url": a.advisory_url,
+            }
+            for a in advisories
+        ],
+        "top_cvss_score": advisories[0].cvss_score if advisories and advisories[0].cvss_score else None,
     }
 
 
@@ -147,13 +159,15 @@ def _issue_to_dict(i) -> dict:
     }
 
 def _module_to_dict(m) -> dict:
+    import json as _j
+    counts = _j.loads(m.issue_counts or "{}") if isinstance(m.issue_counts, str) else (m.issue_counts or {})
     return {
         "id": m.id, "path": m.path, "loc": m.loc,
-        "complexity_avg": m.complexity_avg, "complexity_max": m.complexity_max,
-        "churn_score": m.churn_score, "debt_score": m.debt_score, "grade": m.grade,
-        "issue_count_critical": m.issue_count_critical,
-        "issue_count_major": m.issue_count_major,
-        "issue_count_minor": m.issue_count_minor,
+        "complexity_avg": m.complexity_avg, "max_complexity": m.max_complexity,
+        "churn_count": m.churn_count, "debt_score": m.debt_score, "grade": m.grade,
+        "issue_count_critical": counts.get("critical", 0),
+        "issue_count_major":    counts.get("major", 0),
+        "issue_count_minor":    counts.get("minor", 0),
     }
 
 def _misconfig_to_dict(m) -> dict:
@@ -175,7 +189,7 @@ def _dep_to_dict(d) -> dict:
 
 def _compliance_to_dict(c) -> dict:
     return {
-        "framework": c.framework, "control_id": c.control_id,
+        "framework": c.standard, "control_id": c.control_id,
         "control_name": c.control_name, "status": c.status,
-        "issue_count": c.issue_count, "evidence": c.evidence or [],
+        "issue_count": c.issue_count, "evidence": __import__('json').loads(c.evidence) if c.evidence else [],
     }

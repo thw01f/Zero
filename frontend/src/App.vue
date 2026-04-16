@@ -293,6 +293,8 @@ const navSections = [
   { label: 'Infrastructure', items: [
     { path: '/infra',   icon: 'docker', label: 'Infra Posture' },
     { path: '/siem',    icon: 'eye',    label: 'Live Logs',    badge: 'LIVE' },
+    { path: '/evebox',  icon: 'shield', label: 'EveBox IDS',   badge: 'IDS' },
+    { path: '/cockpit', icon: 'server', label: 'Cockpit',      badge: 'SYS' },
     { path: '/updates', icon: 'update', label: 'Update Center' },
   ]},
   { label: 'System', items: [

@@ -62,10 +62,13 @@ async def run_all(
 
 async def _run_tool(tool, repo_path, language, cb):
     try:
-        findings = await tool.run(repo_path, language)
+        findings = await asyncio.wait_for(tool.run(repo_path, language), timeout=120)
         if cb:
             await cb({"event": "scanner_done", "scanner": tool.name, "count": len(findings)})
         return findings
+    except asyncio.TimeoutError:
+        logger.warning(f"{tool.name} timed out after 120s — skipping")
+        return []
     except Exception as e:
         logger.warning(f"{tool.name} failed: {e}")
         return []

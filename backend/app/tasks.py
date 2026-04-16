@@ -83,9 +83,13 @@ async def _scan_pipeline(job_id: str, repo_url: str, language: str, standards_do
             _j.status = StatusEnum.running
             db.commit()
 
-        # ── 1. Clone ──────────────────────────────────────────────────────────
+        # ── 1. Clone (skip if already a local path from upload) ──────────────
         ws({"event": "progress", "stage": "cloning", "progress": 5})
-        clone_repo(repo_url, repo_path)
+        if Path(repo_url).exists():
+            # Uploaded archive already extracted — use it directly
+            repo_path = repo_url
+        else:
+            clone_repo(repo_url, repo_path)
         ws({"event": "progress", "stage": "cloned",  "progress": 8})
 
         # ── 2. Language + metrics ─────────────────────────────────────────────
@@ -233,7 +237,9 @@ async def _scan_pipeline(job_id: str, repo_url: str, language: str, standards_do
             pass
         raise
     finally:
-        shutil.rmtree(repo_path, ignore_errors=True)
+        # Only clean up if we cloned (not for uploaded local paths which scan.py owns)
+        if not Path(repo_url).exists() or repo_path != repo_url:
+            shutil.rmtree(repo_path, ignore_errors=True)
 
 
 @celery_app.task(name="app.tasks.monitor_advisories_task")

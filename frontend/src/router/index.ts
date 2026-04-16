@@ -31,6 +31,8 @@ const router = createRouter({
     { path: '/compare',      component: () => import('../views/RepoCompare.vue') },
     { path: '/graph',        component: () => import('../views/CodeGraph.vue') },
     { path: '/siem',         component: () => import('../views/SiemPage.vue') },
+    { path: '/evebox',       component: () => import('../views/EveBoxPage.vue') },
+    { path: '/cockpit',      component: () => import('../views/CockpitPage.vue') },
     { path: '/profile',      component: () => import('../views/Profile.vue') },
   ],
 })

@@ -20,16 +20,22 @@ def aggregate_modules(
             rel = f.file_path.replace(repo_path, "").lstrip("/\\")
             file_findings[rel].append(f)
 
-    # Get complexity per file via lizard if available
+    # Get complexity per file via lizard if available (skip on huge repos)
     complexity_map: Dict[str, float] = {}
     try:
-        import lizard
-        results = lizard.analyze([repo_path])
-        for file_info in results:
-            rel = file_info.filename.replace(repo_path, "").lstrip("/\\")
-            if file_info.function_list:
-                avg = sum(f.cyclomatic_complexity for f in file_info.function_list) / len(file_info.function_list)
-                complexity_map[rel] = avg
+        import lizard, signal as _sig
+        def _timeout_handler(signum, frame): raise TimeoutError("lizard timeout")
+        _sig.signal(_sig.SIGALRM, _timeout_handler)
+        _sig.alarm(30)
+        try:
+            results = lizard.analyze([repo_path])
+            for file_info in results:
+                rel = file_info.filename.replace(repo_path, "").lstrip("/\\")
+                if file_info.function_list:
+                    avg = sum(f.cyclomatic_complexity for f in file_info.function_list) / len(file_info.function_list)
+                    complexity_map[rel] = avg
+        finally:
+            _sig.alarm(0)
     except Exception:
         pass
 
@@ -67,18 +73,21 @@ def aggregate_modules(
             churn, max_churn, dep_stale, test_gap,
         )
 
+        import json as _json
         modules.append({
             "id": str(uuid.uuid4()),
             "path": file_path,
             "loc": loc,
             "complexity_avg": round(complexity, 2),
-            "complexity_max": round(complexity_map.get(file_path, 0), 2),
-            "churn_score": round(churn / max(max_churn, 1), 3),
+            "max_complexity": int(round(complexity_map.get(file_path, 0))),
+            "churn_count": churn,
             "debt_score": score,
             "grade": grade,
-            "issue_count_critical": sev["critical"],
-            "issue_count_major": sev["major"],
-            "issue_count_minor": sev["minor"],
+            "issue_counts": _json.dumps({
+                "critical": sev["critical"],
+                "major":    sev["major"],
+                "minor":    sev["minor"],
+            }),
         })
 
     return sorted(modules, key=lambda m: m["debt_score"], reverse=True)
