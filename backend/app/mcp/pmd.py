@@ -1,40 +1,37 @@
-import asyncio, json
+import asyncio
 from typing import List
+from pathlib import Path
 from .base import BaseTool, Finding
 
 
-class PMDTool(BaseTool):
+class PmdTool(BaseTool):
     name = "pmd"
     languages = ["java"]
-    category = "smell"
+    category = "quality"
     binary = "pmd"
 
     async def run(self, repo_path: str, language: str) -> List[Finding]:
+        if language not in self.languages or not self._available():
+            return []
         try:
             proc = await asyncio.create_subprocess_exec(
-                "pmd", "check", "-d", repo_path, "-f", "json",
-                "-R", "rulesets/java/quickstart.xml", "--no-fail-on-violation",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
+                "pmd", "check", "-d", repo_path, "-R", "category/java/bestpractices.xml",
+                "-f", "json", "--no-fail-on-violation",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
             )
+            import json
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
             data = json.loads(stdout)
+            findings = []
+            for file_result in data.get("files", []):
+                for v in file_result.get("violations", []):
+                    findings.append(Finding(
+                        file_path=file_result.get("filename", ""),
+                        line_start=v.get("beginline", 0),
+                        severity="minor", category="quality",
+                        rule_id=v.get("rule"), message=v.get("description", ""),
+                        tool="pmd",
+                    ))
+            return findings
         except Exception:
             return []
-
-        findings = []
-        for file_result in data.get("files", []):
-            for v in file_result.get("violations", []):
-                priority = v.get("priority", 3)
-                severity = "critical" if priority <= 1 else "major" if priority <= 3 else "minor"
-                findings.append(Finding(
-                    file_path=file_result.get("filename", ""),
-                    line_start=v.get("beginline", 0),
-                    line_end=v.get("endline"),
-                    severity=severity,
-                    category="smell",
-                    rule_id=v.get("rule", "pmd"),
-                    message=v.get("description", ""),
-                    tool="pmd",
-                ))
-        return findings
