@@ -132,6 +132,33 @@ def list_jobs(limit: int = 20, db: Session = Depends(get_db)):
         for j in jobs
     ]
 
+@router.delete("/jobs/{job_id}", status_code=200)
+def delete_job(job_id: str, db: Session = Depends(get_db)):
+    from ..models import Job, Issue, Module, Misconfig, DepUpdate
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    db.query(Issue).filter(Issue.job_id == job_id).delete()
+    db.query(Module).filter(Module.job_id == job_id).delete()
+    db.query(Misconfig).filter(Misconfig.job_id == job_id).delete()
+    db.query(DepUpdate).filter(DepUpdate.job_id == job_id).delete()
+    db.delete(job)
+    db.commit()
+    return {"deleted": job_id}
+
+
+@router.delete("/jobs", status_code=200)
+def clear_all_jobs(db: Session = Depends(get_db)):
+    from ..models import Job, Issue, Module, Misconfig, DepUpdate
+    db.query(Issue).delete()
+    db.query(Module).delete()
+    db.query(Misconfig).delete()
+    db.query(DepUpdate).delete()
+    count = db.query(Job).delete()
+    db.commit()
+    return {"deleted": count}
+
+
 @router.post("/upload", response_model=ScanResponse, status_code=202)
 async def upload_scan(
     background_tasks: BackgroundTasks,

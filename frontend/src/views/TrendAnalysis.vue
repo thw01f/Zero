@@ -5,7 +5,10 @@
         <div class="ft-card-title" style="font-size:11px;letter-spacing:0.12em">TREND ANALYSIS</div>
         <div class="text-xs mt-0.5" style="color:#4a5568">Historical view across all scans</div>
       </div>
-      <button class="ft-btn ft-btn-secondary" @click="load">Refresh</button>
+      <div class="flex gap-2">
+        <button class="ft-btn ft-btn-secondary" @click="load">Refresh</button>
+        <button class="ft-btn" style="background:#3d1a1a;color:#f25555;border:1px solid #6b2a2a" @click="clearAll">Clear History</button>
+      </div>
     </div>
 
     <div v-if="loading" class="ft-card ft-card-body text-center py-8">
@@ -120,6 +123,7 @@
                 <th>Debt</th>
                 <th>Issues</th>
                 <th>Time</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -134,6 +138,15 @@
                 <td style="color:#dde3ef">{{ j.debt_score ?? '—' }}</td>
                 <td :style="{ color: j.issue_count > 0 ? '#f25555' : '#3ecf8e', fontWeight: 600 }">{{ j.issue_count ?? 0 }}</td>
                 <td style="font-size:11px;color:#4a5568">{{ j.scan_time_ms ? (j.scan_time_ms/1000).toFixed(1)+'s' : '—' }}</td>
+                <td>
+                  <button
+                    title="Delete this scan"
+                    style="background:none;border:none;cursor:pointer;color:#6b2a2a;font-size:14px;padding:2px 6px;border-radius:4px"
+                    @mouseover="($event.target as HTMLElement).style.color='#f25555'"
+                    @mouseleave="($event.target as HTMLElement).style.color='#6b2a2a'"
+                    @click="deleteJob(j.job_id)"
+                  >✕</button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -151,13 +164,15 @@ const report = useReportStore()
 const history = ref<any[]>([])
 const loading = ref(false)
 
+function authHeaders() {
+  const token = localStorage.getItem('dl_token') || ''
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 async function load() {
   loading.value = true
   try {
-    const token = localStorage.getItem('dl_token') || ''
-    const r = await fetch('/api/scan/jobs?limit=50', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    const r = await fetch('/api/scan/jobs?limit=50', { headers: authHeaders() })
     const d = await r.json()
     const all = (Array.isArray(d) ? d : (d.jobs ?? []))
     history.value = all.filter((j: any) => j.status === 'complete')
@@ -166,6 +181,18 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+async function deleteJob(jobId: string) {
+  if (!confirm('Delete this scan from history?')) return
+  await fetch(`/api/scan/jobs/${jobId}`, { method: 'DELETE', headers: authHeaders() })
+  history.value = history.value.filter((j: any) => j.job_id !== jobId)
+}
+
+async function clearAll() {
+  if (!confirm('Delete ALL scan history? This cannot be undone.')) return
+  await fetch('/api/scan/jobs', { method: 'DELETE', headers: authHeaders() })
+  history.value = []
 }
 
 onMounted(load)
