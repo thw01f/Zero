@@ -517,7 +517,7 @@ const navSections = [
     top: var(--nav-height);
     left: 0;
     height: calc(100vh - var(--nav-height));
-    z-index: 10000;
+    z-index: 10000 !important;
     width: var(--sidebar-width) !important;
     transform: translateX(-110%);
     transition: transform .25s cubic-bezier(.4,0,.2,1), box-shadow .25s;
