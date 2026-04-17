@@ -46,16 +46,28 @@
         <!-- Issue detail drawer (shown when issue selected) -->
         <transition name="slide-down">
           <div v-if="selectedIssue && explainData" class="ai-explain-card">
+            <!-- Header -->
             <div class="ai-explain-hdr">
               <span class="sev-chip" :class="'sev-' + selectedIssue.severity">{{ selectedIssue.severity }}</span>
               <span class="ai-explain-rule">{{ selectedIssue.rule_id }}</span>
               <span class="ai-explain-path">{{ shortPath(selectedIssue.file_path) }}:{{ selectedIssue.line_start }}</span>
+              <!-- Tab switcher -->
+              <div class="ai-explain-tabs">
+                <button :class="['ai-etab', explainTab==='analysis' && 'active']" @click="explainTab='analysis'">Analysis</button>
+                <button :class="['ai-etab', explainTab==='codefix' && 'active']" @click="explainTab='codefix'; ensureFix()">
+                  Code Fix
+                  <span v-if="fixPatched" class="ai-etab-dot"></span>
+                </button>
+              </div>
               <button class="ai-close-btn" @click="clearExplain">✕</button>
             </div>
+
             <div v-if="explainLoading" class="ai-explain-loading">
               <span class="spin-dot"></span> Analyzing vulnerability…
             </div>
-            <div v-else class="ai-explain-body">
+
+            <!-- Analysis tab -->
+            <div v-else-if="explainTab==='analysis'" class="ai-explain-body">
               <div class="ai-explain-section">
                 <div class="ai-explain-label">WHY IT HAPPENS</div>
                 <div class="ai-explain-text">{{ explainData.why }}</div>
@@ -65,15 +77,111 @@
                 <div class="ai-explain-text" style="color:#f97316">{{ explainData.risk }}</div>
               </div>
               <div class="ai-explain-section">
-                <div class="ai-explain-label">FIX</div>
+                <div class="ai-explain-label">FIX SUMMARY</div>
                 <pre class="ai-explain-code">{{ explainData.fix }}</pre>
               </div>
               <div v-if="explainData.example_attack" class="ai-explain-section">
                 <div class="ai-explain-label">ATTACK EXAMPLE</div>
                 <div class="ai-explain-text" style="color:#ef4444;font-size:11px">{{ explainData.example_attack }}</div>
               </div>
+              <div v-if="explainData.references?.length" class="ai-explain-section">
+                <div class="ai-explain-label">REFERENCES</div>
+                <div class="ai-refs">
+                  <span v-for="r in explainData.references" :key="r" class="ft-tag">{{ r }}</span>
+                </div>
+              </div>
+              <div style="padding-bottom:4px">
+                <button class="ft-btn ft-btn-secondary ft-btn-sm" @click="explainTab='codefix'; ensureFix()">
+                  View Code Fix →
+                </button>
+              </div>
             </div>
-            <div v-if="selectedIssue.fix_diff" class="ai-explain-diff" v-html="renderDiff(selectedIssue.fix_diff)"></div>
+
+            <!-- Code Fix tab -->
+            <div v-else-if="explainTab==='codefix'" class="ai-codefix-panel">
+              <div v-if="fixLoading" class="ai-explain-loading">
+                <span class="spin-dot"></span> Generating patch…
+              </div>
+              <div v-else class="ai-codefix-body">
+                <!-- Before / After toggle -->
+                <div class="ai-codefix-toolbar">
+                  <div class="ai-codefix-toggle">
+                    <button :class="['ai-toggle-btn', fixView==='split' && 'active']" @click="fixView='split'">Split</button>
+                    <button :class="['ai-toggle-btn', fixView==='diff' && 'active']"  @click="fixView='diff'">Diff</button>
+                    <button :class="['ai-toggle-btn', fixView==='fixed' && 'active']" @click="fixView='fixed'">Fixed only</button>
+                  </div>
+                  <div style="display:flex;gap:6px;margin-left:auto">
+                    <button class="ft-btn ft-btn-secondary ft-btn-sm" @click="copyFix" :title="copied ? 'Copied!' : 'Copy fixed code'">
+                      {{ copied ? '✓ Copied' : 'Copy Fix' }}
+                    </button>
+                    <button class="ft-btn ft-btn-secondary ft-btn-sm" @click="sendFixToChat">Ask AI</button>
+                    <button class="ft-btn ft-btn-primary ft-btn-sm" @click="acceptFix" :disabled="selectedIssue.fix_accepted===1">
+                      {{ selectedIssue.fix_accepted===1 ? '✓ Accepted' : 'Accept Fix' }}
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Split view -->
+                <div v-if="fixView==='split'" class="ai-codefix-split">
+                  <div class="ai-codefix-pane">
+                    <div class="ai-codefix-pane-hdr ai-pane-bad">
+                      <span>⚠ Vulnerable</span>
+                      <span class="ai-pane-file">{{ shortPath(selectedIssue.file_path) }}:{{ selectedIssue.line_start }}</span>
+                    </div>
+                    <div class="ai-code-editor">
+                      <div v-for="(line, idx) in vulnerableLines" :key="idx"
+                        :class="['ai-code-line', idx+1 === selectedIssue.line_start && 'ai-code-line-hl']">
+                        <span class="ai-lineno">{{ idx + 1 }}</span>
+                        <span class="ai-linetext">{{ line }}</span>
+                      </div>
+                      <div v-if="!vulnerableLines.length" class="ai-code-placeholder">
+                        <span>Paste vulnerable code below to compare</span>
+                      </div>
+                    </div>
+                    <textarea v-model="userCodeInput" class="ai-code-paste"
+                      placeholder="Paste the vulnerable code snippet here…"
+                      rows="3" @input="parseUserCode"></textarea>
+                  </div>
+                  <div class="ai-codefix-pane">
+                    <div class="ai-codefix-pane-hdr ai-pane-good">
+                      <span>✓ Fixed</span>
+                      <span class="ai-pane-file">AI suggested patch</span>
+                    </div>
+                    <div class="ai-code-editor">
+                      <div v-for="(line, idx) in fixedLines" :key="idx" class="ai-code-line ai-code-line-fix">
+                        <span class="ai-lineno">{{ idx + 1 }}</span>
+                        <span class="ai-linetext">{{ line }}</span>
+                      </div>
+                      <div v-if="!fixedLines.length" class="ai-code-placeholder">No fix generated yet</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Diff view -->
+                <div v-if="fixView==='diff'" class="ai-codefix-diff-wrap">
+                  <div v-if="selectedIssue.fix_diff" v-html="renderDiff(selectedIssue.fix_diff)" class="ai-diff-inner"></div>
+                  <div v-else-if="generatedDiff" v-html="renderDiff(generatedDiff)" class="ai-diff-inner"></div>
+                  <div v-else class="ai-code-placeholder" style="padding:20px">
+                    No diff available — paste vulnerable code in Split view to generate one.
+                  </div>
+                </div>
+
+                <!-- Fixed only -->
+                <div v-if="fixView==='fixed'" class="ai-code-editor ai-fixed-only">
+                  <div v-for="(line, idx) in fixedLines" :key="idx" class="ai-code-line ai-code-line-fix">
+                    <span class="ai-lineno">{{ idx + 1 }}</span>
+                    <span class="ai-linetext">{{ line }}</span>
+                  </div>
+                  <div v-if="!fixedLines.length" class="ai-code-placeholder">No fix available</div>
+                </div>
+
+                <!-- Patch notes -->
+                <div v-if="fixNotes" class="ai-fix-notes">
+                  <div class="ai-explain-label" style="margin-bottom:6px">PATCH NOTES</div>
+                  <div class="ai-explain-text">{{ fixNotes }}</div>
+                </div>
+              </div>
+            </div>
           </div>
         </transition>
 
@@ -156,6 +264,18 @@ const selectedIssue = ref<any>(null)
 const explainData   = ref<any>(null)
 const explainLoading = ref(false)
 const modelName     = ref('AI')
+
+// Code Fix state
+const explainTab    = ref<'analysis'|'codefix'>('analysis')
+const fixView       = ref<'split'|'diff'|'fixed'>('split')
+const fixLoading    = ref(false)
+const fixPatched    = ref(false)
+const fixNotes      = ref('')
+const userCodeInput = ref('')
+const vulnerableLines = ref<string[]>([])
+const fixedLines    = ref<string[]>([])
+const generatedDiff = ref('')
+const copied        = ref(false)
 
 const suggestions = [
   'What are the top 3 critical fixes?',
@@ -246,7 +366,83 @@ async function selectIssue(iss: any) {
 
 function clearExplain() {
   selectedIssue.value = null
-  explainData.value = null
+  explainData.value   = null
+  explainTab.value    = 'analysis'
+  fixView.value       = 'split'
+  fixPatched.value    = false
+  fixNotes.value      = ''
+  userCodeInput.value = ''
+  vulnerableLines.value = []
+  fixedLines.value    = []
+  generatedDiff.value = ''
+}
+
+async function ensureFix() {
+  if (fixPatched.value || !selectedIssue.value || !explainData.value) return
+  fixLoading.value = true
+  try {
+    // Build a richer patch request asking for full before/after code blocks
+    const { data } = await axios.post('/api/analyze/explain', {
+      file_path: selectedIssue.value.file_path,
+      line: selectedIssue.value.line_start,
+      severity: selectedIssue.value.severity,
+      rule_id: selectedIssue.value.rule_id,
+      message: `Generate a complete before/after code patch to fix: ${selectedIssue.value.message}`,
+      code_context: selectedIssue.value.llm_explanation || selectedIssue.value.message,
+      language: report.data?.language || 'unknown',
+      cwe_id: selectedIssue.value.cwe_id,
+      owasp_category: selectedIssue.value.owasp_category,
+    })
+    // Parse fix field — split on --- / +++ markers or treat as fixed snippet
+    const rawFix: string = data.fix || explainData.value?.fix || ''
+    fixedLines.value = rawFix.split('\n')
+    fixNotes.value = data.why || explainData.value?.why || ''
+    // Use stored diff if available
+    if (selectedIssue.value.fix_diff) {
+      generatedDiff.value = selectedIssue.value.fix_diff
+    }
+    fixPatched.value = true
+  } catch {
+    // Fallback to already-fetched fix
+    const raw = explainData.value?.fix || ''
+    fixedLines.value = raw.split('\n')
+    fixNotes.value   = explainData.value?.why || ''
+    fixPatched.value = true
+  } finally {
+    fixLoading.value = false
+  }
+}
+
+function parseUserCode() {
+  vulnerableLines.value = userCodeInput.value.split('\n')
+  // Auto-generate a simple diff when user pastes code
+  if (fixedLines.value.length && vulnerableLines.value.length) {
+    const orig = vulnerableLines.value.map(l => '- ' + l).join('\n')
+    const fixed = fixedLines.value.map(l => '+ ' + l).join('\n')
+    generatedDiff.value = `--- a/${selectedIssue.value?.file_path || 'file'}\n+++ b/${selectedIssue.value?.file_path || 'file'}\n@@ -${selectedIssue.value?.line_start || 1} @@\n${orig}\n${fixed}`
+  }
+}
+
+async function copyFix() {
+  const text = fixedLines.value.join('\n')
+  await navigator.clipboard.writeText(text).catch(() => {})
+  copied.value = true
+  setTimeout(() => copied.value = false, 2000)
+}
+
+function sendFixToChat() {
+  const fix = fixedLines.value.join('\n')
+  const q = `Here is the AI-suggested fix for ${selectedIssue.value?.rule_id} in ${selectedIssue.value?.file_path}:\n\`\`\`\n${fix}\n\`\`\`\nIs this fix correct and complete? Are there any edge cases I should handle?`
+  input.value = q
+  // scroll to input
+}
+
+async function acceptFix() {
+  if (!selectedIssue.value) return
+  try {
+    await axios.post(`/api/fixes/${selectedIssue.value.id}/accept`, { accepted: true })
+    selectedIssue.value.fix_accepted = 1
+  } catch {}
 }
 
 function clearChat() {
@@ -510,6 +706,97 @@ function renderDiff(diff: string): string {
 }
 .ai-send-btn:disabled { opacity: 0.4; cursor: default; }
 .ai-send-btn:not(:disabled):hover { opacity: 0.85; }
+
+/* Explain tab switcher */
+.ai-explain-tabs {
+  display: flex; gap: 2px; margin-left: 8px;
+  background: var(--gc-surface-2); border: 1px solid var(--gc-border);
+  border-radius: 6px; padding: 2px;
+}
+.ai-etab {
+  padding: 3px 10px; font-size: 10px; font-weight: 600; border-radius: 4px;
+  border: none; cursor: pointer; background: transparent; color: var(--gc-text-3);
+  transition: all .15s; position: relative;
+}
+.ai-etab.active { background: var(--gc-primary); color: #fff; }
+.ai-etab:not(.active):hover { color: var(--gc-text); }
+.ai-etab-dot {
+  position: absolute; top: 3px; right: 4px;
+  width: 5px; height: 5px; border-radius: 50%; background: #3ecf8e;
+}
+
+.ai-refs { display: flex; flex-wrap: wrap; gap: 5px; }
+
+/* Code Fix panel */
+.ai-codefix-panel { display: flex; flex-direction: column; min-height: 0; }
+.ai-codefix-body  { display: flex; flex-direction: column; gap: 0; }
+
+.ai-codefix-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-bottom: 1px solid var(--gc-border);
+  background: var(--gc-surface-2); flex-shrink: 0; flex-wrap: wrap;
+}
+.ai-codefix-toggle {
+  display: flex; background: var(--gc-surface); border: 1px solid var(--gc-border);
+  border-radius: 6px; overflow: hidden;
+}
+.ai-toggle-btn {
+  padding: 4px 12px; font-size: 11px; font-weight: 500; border: none; cursor: pointer;
+  background: transparent; color: var(--gc-text-3); transition: all .15s;
+}
+.ai-toggle-btn.active { background: var(--gc-primary); color: #fff; }
+.ai-toggle-btn:not(.active):hover { background: var(--gc-surface-2); color: var(--gc-text); }
+
+.ai-codefix-split {
+  display: grid; grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid var(--gc-border);
+}
+.ai-codefix-pane { display: flex; flex-direction: column; overflow: hidden; }
+.ai-codefix-pane:first-child { border-right: 1px solid var(--gc-border); }
+.ai-codefix-pane-hdr {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 10px; font-size: 10px; font-weight: 700; letter-spacing: .05em;
+  flex-shrink: 0;
+}
+.ai-pane-bad  { background: rgba(239,68,68,.08); color: #ef4444; border-bottom: 1px solid rgba(239,68,68,.2); }
+.ai-pane-good { background: rgba(62,207,142,.08); color: #3ecf8e; border-bottom: 1px solid rgba(62,207,142,.2); }
+.ai-pane-file { font-family: var(--font-mono); font-size: 9px; color: var(--gc-text-3); font-weight: 400; }
+
+.ai-code-editor {
+  font-family: 'JetBrains Mono', 'Fira Mono', monospace; font-size: 11px;
+  background: #0d1117; overflow: auto; max-height: 180px;
+  line-height: 1.6;
+}
+.ai-fixed-only { padding: 4px 0; max-height: 200px; }
+.ai-code-line {
+  display: flex; align-items: flex-start; padding: 0 4px;
+  transition: background .1s;
+}
+.ai-code-line:hover { background: rgba(255,255,255,.04); }
+.ai-code-line-hl  { background: rgba(239,68,68,.12) !important; }
+.ai-code-line-fix { background: rgba(62,207,142,.05); }
+.ai-lineno {
+  min-width: 32px; color: #3d4451; font-size: 10px; padding-right: 8px;
+  user-select: none; text-align: right; flex-shrink: 0; padding-top: 1px;
+}
+.ai-linetext { color: #e6edf3; white-space: pre; }
+.ai-code-placeholder {
+  padding: 16px; font-size: 11px; color: var(--gc-text-3); font-style: italic; text-align: center;
+}
+.ai-code-paste {
+  resize: none; font-size: 11px; font-family: 'JetBrains Mono', monospace;
+  background: #0a0d12; border: none; border-top: 1px solid var(--gc-border);
+  color: var(--gc-text-2); padding: 6px 10px; outline: none; width: 100%;
+}
+.ai-code-paste::placeholder { color: var(--gc-text-3); }
+
+.ai-codefix-diff-wrap { max-height: 240px; overflow: auto; }
+.ai-diff-inner { font-size: 11px; }
+
+.ai-fix-notes {
+  padding: 10px 14px; border-top: 1px solid var(--gc-border);
+  background: var(--gc-surface-2);
+}
 
 /* Diff */
 :deep(.diff-block) { background: #0a0e1a; border: 1px solid #1e2d47; border-radius: 4px; overflow-x: auto; }
