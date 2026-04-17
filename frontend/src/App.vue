@@ -226,6 +226,15 @@ function toggleTheme() {
   theme.value = theme.value === 'dark' ? 'light' : 'dark'
   document.documentElement.setAttribute('data-theme', theme.value)
   localStorage.setItem('dl_theme', theme.value)
+  
+  if (theme.value === 'light') {
+    // Clear inline variables injected by the custom theme engine so light CSS variables can render
+    const keys = ['--gc-bg','--gc-surface','--gc-surface-2','--gc-nav-bg','--gc-sidebar-bg','--gc-sidebar-hover','--gc-border','--gc-divider','--gc-primary','--gc-text','--gc-text-2','--gc-text-3']
+    keys.forEach(k => document.documentElement.style.removeProperty(k))
+  } else {
+    // If switching back to dark, force a page reload to cleanly re-inject the active dark custom palette
+    window.location.reload()
+  }
 }
 function doSearch() {
   const q = searchQ.value.trim()
@@ -503,7 +512,7 @@ const navSections = [
     top: var(--nav-height);
     left: 0;
     height: calc(100vh - var(--nav-height));
-    z-index: 150;
+    z-index: 10000;
     width: var(--sidebar-width) !important;
     transform: translateX(-110%);
     transition: transform .25s cubic-bezier(.4,0,.2,1), box-shadow .25s;
@@ -534,7 +543,7 @@ const navSections = [
   inset: 0;
   top: var(--nav-height);
   background: rgba(0,0,0,.55);
-  z-index: 149;
+  z-index: 9999;
   display: none;
 }
 @media (max-width: 768px) {

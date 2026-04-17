@@ -510,7 +510,7 @@ pre.gc-code {
   font-size: 14px; font-weight: 500; color: var(--gc-text);
   letter-spacing: 0.02em; text-transform: uppercase;
 }
-.ft-card-body { padding: 20px; flex: 1; }
+.ft-card-body { padding: 20px; flex: 1; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 .ft-widget {
   background: var(--gc-surface);

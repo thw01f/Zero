@@ -73,7 +73,15 @@ async function doLogin() {
 
 function toggleTheme() {
   isDark.value = !isDark.value
-  document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light')
-  localStorage.setItem('dl_theme', isDark.value ? 'dark' : 'light')
+  const t = isDark.value ? 'dark' : 'light'
+  document.documentElement.setAttribute('data-theme', t)
+  localStorage.setItem('dl_theme', t)
+
+  if (t === 'light') {
+    const keys = ['--gc-bg','--gc-surface','--gc-surface-2','--gc-nav-bg','--gc-sidebar-bg','--gc-sidebar-hover','--gc-border','--gc-divider','--gc-primary','--gc-text','--gc-text-2','--gc-text-3']
+    keys.forEach(k => document.documentElement.style.removeProperty(k))
+  } else {
+    window.location.reload()
+  }
 }
 </script>
