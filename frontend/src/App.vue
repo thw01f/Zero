@@ -434,7 +434,14 @@ const navSections = [
 .spin-char { animation:spin .8s linear infinite; display:inline-block; }
 @keyframes spin { to { transform:rotate(360deg); } }
 
-.sidebar-nav { flex:1; overflow-y:auto; overflow-x:hidden; padding:6px 0 12px; }
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 0 32px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
 .sidebar-nav::-webkit-scrollbar { width:4px; }
 .sidebar-nav::-webkit-scrollbar-thumb { background:var(--gc-border); border-radius:2px; }
 .sidebar-section { margin-bottom:2px; }
