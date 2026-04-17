@@ -34,6 +34,9 @@ const router = createRouter({
     { path: '/evebox',       component: () => import('../views/EveBoxPage.vue') },
     { path: '/cockpit',      component: () => import('../views/CockpitPage.vue') },
     { path: '/profile',      component: () => import('../views/Profile.vue') },
+    { path: '/post-scan',    component: () => import('../views/PostScan.vue') },
+    { path: '/deploy',       component: () => import('../views/DeployManager.vue') },
+    { path: '/pentest',      component: () => import('../views/PentestStudio.vue') },
   ],
 })
 

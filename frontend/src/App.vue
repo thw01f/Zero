@@ -306,6 +306,11 @@ const navSections = [
     { path: '/cockpit', icon: 'server', label: 'Cockpit',      badge: 'SYS' },
     { path: '/updates', icon: 'update', label: 'Update Center' },
   ]},
+  { label: 'Actions', items: [
+    { path: '/post-scan', icon: 'fix',      label: 'Post-Scan',      badge: 'NEW' },
+    { path: '/deploy',    icon: 'docker',   label: 'Deploy Manager', badge: 'NEW' },
+    { path: '/pentest',   icon: 'shield',   label: 'Pentest Studio', badge: 'NEW' },
+  ]},
   { label: 'System', items: [
     { path: '/ai',          icon: 'bot',      label: 'AI Assistant' },
     { path: '/self-health', icon: 'health',   label: 'Self Health'  },
