@@ -521,15 +521,18 @@ const navSections = [
   /* Sidebar becomes a fixed overlay on mobile */
   .gc-sidebar {
     position: fixed !important;
-    top: var(--nav-height);
-    left: 0;
-    bottom: 0;
-    height: auto !important;
+    top: var(--nav-height) !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    height: calc(100dvh - var(--nav-height)) !important;
+    max-height: calc(100dvh - var(--nav-height)) !important;
     z-index: 10000 !important;
     width: var(--sidebar-width) !important;
     transform: translateX(-110%);
     transition: transform .25s cubic-bezier(.4,0,.2,1), box-shadow .25s;
     box-shadow: none;
+    display: flex !important;
+    flex-direction: column !important;
   }
   .gc-sidebar.mobile-open {
     transform: translateX(0);
