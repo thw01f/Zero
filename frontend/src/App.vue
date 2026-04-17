@@ -506,8 +506,8 @@ const navSections = [
   /* Hide search bar on mobile — save nav space */
   .gc-nav-center { display: none; }
 
-  /* Collapse right nav items */
-  .gc-nav-right > *:not(.notif-btn):not([class*="nav-avatar"]) {
+  /* Collapse ONLY the AI model selector on mobile to save space */
+  .gc-nav-right > *:first-child {
     display: none;
   }
 
@@ -516,7 +516,8 @@ const navSections = [
     position: fixed !important;
     top: var(--nav-height);
     left: 0;
-    height: calc(100vh - var(--nav-height));
+    bottom: 0;
+    height: auto !important;
     z-index: 10000 !important;
     width: var(--sidebar-width) !important;
     transform: translateX(-110%);
