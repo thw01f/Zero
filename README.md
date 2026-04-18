@@ -6,7 +6,7 @@
 [![Build](https://img.shields.io/badge/build-passing-brightgreen)](#)
 [![Grade](https://img.shields.io/badge/self--scan-Grade%20A-brightgreen)](#)
 [![LLM](https://img.shields.io/badge/LLM-Ollama%20%7C%20Anthropic-orange)](#)
-[![Commits](https://img.shields.io/badge/commits-303%2B-blue)](#)
+[![Commits](https://img.shields.io/badge/commits-329%2B-blue)](#)
 [![Panels](https://img.shields.io/badge/UI%20panels-20%2B-blueviolet)](#)
 [![Scanners](https://img.shields.io/badge/scanners-19-red)](#)
 
