@@ -272,6 +272,22 @@ Full model catalog: **Ollama (Local)** — phi4:latest, dolphin3:latest, qwen2.5
 
 ---
 
+### Settings — Scanner Configuration
+
+![Settings Scanner](screenshots/27-settings-scanner.png)
+
+Scanner tuning panel: Max repo size 200 MB, clone timeout 60s, LLM fix batch size 20, advisory poll hours 6. Ollama (Local LLM) section shows URL (`http://localhost:11434`), default model (`qwen2.5-coder:14b`), and Force Local Mode: Yes — guaranteeing 100% offline operation.
+
+---
+
+### My Profile
+
+![My Profile](screenshots/28-profile.png)
+
+Per-user profile management: full name, username, email, and avatar color picker. Tabs for Account, Security (password change), and Activity log. The admin account (`admin@darklead.local`) is seeded on first startup.
+
+---
+
 ## Default Login
 
 | Field | Value |
