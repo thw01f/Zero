@@ -1,4 +1,4 @@
-# DarkLead — AI-Powered Code Intelligence Platform
+# Zero — AI-Powered Code Intelligence Platform
 
 > **TENSOR'26 Hackathon — PS29** | Team DARKLEAD! | Members: GOWTHAMANGS | RAMYAPRABHA B | NANDAKISHORE V | DHARSHINI S
 > Built with Claude Sonnet 4.6
@@ -10,7 +10,7 @@
 [![Panels](https://img.shields.io/badge/UI%20panels-20%2B-blueviolet)](#)
 [![Scanners](https://img.shields.io/badge/scanners-19-red)](#)
 
-DarkLead is a production-grade SAST platform that accepts a GitHub repo URL or zip upload, runs **19 static analysis tools in parallel**, triages all findings through a local or cloud LLM, generates **compilable fix diffs**, and presents results through a **20+ panel** FortiAnalyzer-inspired dark dashboard.
+Zero is a production-grade SAST platform that accepts a GitHub repo URL or zip upload, runs **19 static analysis tools in parallel**, triages all findings through a local or cloud LLM, generates **compilable fix diffs**, and presents results through a **20+ panel** FortiAnalyzer-inspired dark dashboard.
 
 ---
 
