@@ -226,7 +226,7 @@ async def _scan_pipeline(job_id: str, repo_url: str, language: str, standards_do
                           for f in sorted(triaged, key=lambda x: SEV.get(x.severity, 4))[:5]]
             top_mods   = [{"path": m["path"], "score": m["debt_score"]} for m in modules_data[:3]]
             summary    = await asyncio.wait_for(
-                generate_summary(repo_url, language, stats, top_issues, top_mods), timeout=60)
+                generate_summary(repo_url, language, stats, top_issues, top_mods), timeout=240)
             j = db.query(Job).filter(Job.id == job_id).first()
             if j: j.summary_narrative = summary; db.commit()
         except (asyncio.TimeoutError, Exception) as e:
