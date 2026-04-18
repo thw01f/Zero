@@ -1,16 +1,7 @@
----
-title: Zero Framework
-emoji: 🔍
-colorFrom: violet
-colorTo: orange
-sdk: docker
-app_port: 7860
----
-
 # DarkLead — AI-Powered Code Intelligence Platform
 
-> **TENSOR'26 Hackathon — PS29** | Team DARKLEAD! | Lead: GOWTHAMANGS (IIT Madras)
-> Built autonomously by Claude Sonnet 4.6
+> **TENSOR'26 Hackathon — PS29** | Team DARKLEAD! | Members: GOWTHAMANGS | RAMYAPRABHA B | NANDAKISHORE V | DHARSHINI S
+> Built with Claude Sonnet 4.6
 
 [![Build](https://img.shields.io/badge/build-passing-brightgreen)](#)
 [![Grade](https://img.shields.io/badge/self--scan-Grade%20A-brightgreen)](#)
