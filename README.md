@@ -1,8 +1,5 @@
 # Zero — AI-Powered Code Intelligence Platform
 
-> **TENSOR'26 Hackathon — PS29** | Team DARKLEAD! | Members: GOWTHAMANGS | RAMYAPRABHA B | NANDAKISHORE V | DHARSHINI S
-> Built with Claude Sonnet 4.6
-
 [![Build](https://img.shields.io/badge/build-passing-brightgreen)](#)
 [![Grade](https://img.shields.io/badge/self--scan-Grade%20A-brightgreen)](#)
 [![LLM](https://img.shields.io/badge/LLM-Ollama%20%7C%20Anthropic-orange)](#)
@@ -520,5 +517,3 @@ All endpoints at `http://localhost:7860`. Auth: `Authorization: Bearer <jwt>`.
 | Network intel | None | **EveBox + Suricata integration** |
 
 ---
-
-*TENSOR'26 Hackathon — PS29 — Team DARKLEAD! — github.com/thw01f/TR-104-DarkLead*
